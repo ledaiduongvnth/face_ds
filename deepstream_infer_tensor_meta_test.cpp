@@ -167,9 +167,7 @@ bool NvDsInferParseCustomResnet(std::vector<NvDsInferLayerInfo>
  */
 static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
     static guint use_device_mem = 0;
-    static NvDsInferNetworkInfo networkInfo
-            {
-                    PGIE_NET_WIDTH, PGIE_NET_HEIGHT, 3};
+    static NvDsInferNetworkInfo networkInfo {PGIE_NET_WIDTH, PGIE_NET_HEIGHT, 3};
     NvDsInferParseDetectionParams detectionParams;
     detectionParams.numClassesConfigured = 4;
     detectionParams.perClassPreclusterThreshold = {0.2, 0.2, 0.2, 0.2};
@@ -185,8 +183,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
 
         /* Iterate user metadata in frames to search PGIE's tensor metadata */
-        for (NvDsMetaList *l_user = frame_meta->frame_user_meta_list;
-             l_user != NULL; l_user = l_user->next) {
+        for (NvDsMetaList *l_user = frame_meta->frame_user_meta_list; l_user != NULL; l_user = l_user->next) {
             NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
             if (user_meta->base_meta.meta_type != NVDSINFER_TENSOR_OUTPUT_META)
                 continue;
@@ -216,8 +213,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                 }
             }
 #endif
-            NvDsInferParseCustomResnet(outputLayersInfo, networkInfo,
-                                       detectionParams, objectList);
+            NvDsInferParseCustomResnet(outputLayersInfo, networkInfo, detectionParams, objectList);
 
             /* Seperate detection rectangles per class for grouping. */
             std::vector<std::vector<
@@ -438,10 +434,7 @@ int main(int argc, char *argv[]) {
     gboolean is_nvinfer_server = FALSE;
     const char *infer_plugin = NVINFER_PLUGIN;
 
-    /* Parse infer type and file names */
-
-    files.emplace_back(
-            "/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/samples/streams/sample_720p.huuu");
+    files.emplace_back("/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/samples/streams/sample_720p.huuu");
     is_nvinfer_server = false;
 
 
@@ -597,10 +590,7 @@ int main(int argc, char *argv[]) {
         g_object_set(G_OBJECT (source), "location", files[i].c_str(), NULL);
     }
 
-    if (!gst_element_link_many(streammux, pgie, queue, sgie1, queue5,
-                               sgie2, queue6, sgie3, queue2, tiler, queue3, nvvidconv, queue4, nvosd,
-
-                               sink, NULL)) {
+    if (!gst_element_link_many(streammux, pgie, queue, sgie1, queue5, sgie2, queue6, sgie3, queue2, tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL)) {
         g_printerr("Elements could not be linked. Exiting.\n");
         return -1;
     }
@@ -612,23 +602,20 @@ int main(int argc, char *argv[]) {
     if (!osd_sink_pad)
         g_print("Unable to get sink pad\n");
     else
-        gst_pad_add_probe(osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER,
-                          osd_sink_pad_buffer_probe, NULL, NULL);
+        gst_pad_add_probe(osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, osd_sink_pad_buffer_probe, NULL, NULL);
 
     /* Add probe to get informed of the meta data generated, we add probe to
      * the source pad of PGIE's next queue element, since by that time, PGIE's
      * buffer would have had got tensor metadata. */
     queue_src_pad = gst_element_get_static_pad(queue, "src");
-    gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER,
-                      pgie_pad_buffer_probe, NULL, NULL);
+    gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
 
     /* Add probe to get informed of the meta data generated, we add probe to
      * the sink pad of tiler element which is just after all SGIE elements.
      * Since by that time, GstBuffer would have had got all SGIEs tensor
      * metadata. */
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
-    gst_pad_add_probe(tiler_sink_pad, GST_PAD_PROBE_TYPE_BUFFER,
-                      sgie_pad_buffer_probe, NULL, NULL);
+    gst_pad_add_probe(tiler_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, sgie_pad_buffer_probe, NULL, NULL);
 
     /* Set the pipeline to "playing" state */
     g_print("Now playing...\n");
