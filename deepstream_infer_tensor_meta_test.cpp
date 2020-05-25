@@ -204,7 +204,6 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                     outputLayersInfo(meta->output_layers_info,
                                      meta->output_layers_info + meta->num_output_layers);
             std::vector<NvDsInferObjectDetectionInfo> objectList;
-#if NVDS_VERSION_MAJOR >= 5
             if (nvds_lib_major_version >= 5) {
                 if (meta->network_info.width != networkInfo.width ||
                     meta->network_info.height != networkInfo.height ||
@@ -212,15 +211,13 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                     g_error ("failed to check pgie network info\n");
                 }
             }
-#endif
             NvDsInferParseCustomResnet(outputLayersInfo, networkInfo, detectionParams, objectList);
 
             /* Seperate detection rectangles per class for grouping. */
             std::vector<std::vector<
                     cv::Rect >> objectListClasses(PGIE_DETECTED_CLASS_NUM);
             for (auto &obj:objectList) {
-                objectListClasses[obj.classId].emplace_back(obj.left, obj.top,
-                                                            obj.width, obj.height);
+                objectListClasses[obj.classId].emplace_back(obj.left, obj.top, obj.width, obj.height);
             }
 
             for (uint32_t c = 0; c < objectListClasses.size(); ++c) {
