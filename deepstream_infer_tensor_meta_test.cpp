@@ -84,8 +84,7 @@ unsigned int nvds_lib_minor_version = NVDS_VERSION_MINOR;
  * of the OSD element. All the infer elements in the pipeline shall attach
  * their metadata to the GstBuffer, here we will iterate & process the metadata
  * forex: class ids to strings, counting of class_id objects etc. */
-static GstPadProbeReturn
-osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info,
+static GstPadProbeReturn osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info,
                           gpointer u_data) {
     GstBuffer *buf = (GstBuffer *) info->data;
     guint num_rects = 0;
@@ -166,8 +165,7 @@ bool NvDsInferParseCustomResnet(std::vector<NvDsInferLayerInfo>
  * iterate & parse the tensor data to get detection bounding boxes. The result
  * would be attached as object-meta(NvDsObjectMeta) into the same frame metadata.
  */
-static GstPadProbeReturn
-pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
+static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
     static guint use_device_mem = 0;
     static NvDsInferNetworkInfo networkInfo
             {
@@ -293,8 +291,7 @@ pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
  * iterate & parse the tensor data to get classification confidence and labels.
  * The result would be attached as classifier_meta into its object's metadata.
  */
-static GstPadProbeReturn
-sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
+static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
     static guint use_device_mem = 0;
 
     NvDsBatchMeta *batch_meta =
@@ -399,8 +396,7 @@ sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
     return GST_PAD_PROBE_OK;
 }
 
-static gboolean
-bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
+static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
     GMainLoop *loop = (GMainLoop *) data;
     switch (GST_MESSAGE_TYPE (msg)) {
         case GST_MESSAGE_EOS:
@@ -434,9 +430,6 @@ int main(int argc, char *argv[]) {
             NULL, *sgie3 = NULL, *tiler =
             NULL, *queue2, *queue3, *queue4, *queue5, *queue6;
     g_print("With tracker\n");
-#ifdef PLATFORM_TEGRA
-    GstElement *transform = NULL;
-#endif
     GstBus *bus = NULL;
     guint bus_watch_id = 0;
     GstPad *osd_sink_pad = NULL, *queue_src_pad = NULL, *tiler_sink_pad = NULL;
