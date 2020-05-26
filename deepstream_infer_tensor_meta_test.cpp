@@ -18,10 +18,10 @@
 #define NVINFER_PLUGIN "nvinfer"
 #define NVINFERSERVER_PLUGIN "nvinferserver"
 
-#define INFER_PGIE_CONFIG_FILE  "/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/sources/apps/sample_apps/deepstream-infer-tensor-meta-test/dstensor_pgie_config.txt"
-#define INFER_SGIE1_CONFIG_FILE "/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/sources/apps/sample_apps/deepstream-infer-tensor-meta-test/dstensor_sgie1_config.txt"
-#define INFER_SGIE2_CONFIG_FILE "/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/sources/apps/sample_apps/deepstream-infer-tensor-meta-test/dstensor_sgie2_config.txt"
-#define INFER_SGIE3_CONFIG_FILE "/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/sources/apps/sample_apps/deepstream-infer-tensor-meta-test/dstensor_sgie3_config.txt"
+#define INFER_PGIE_CONFIG_FILE  "../dstensor_pgie_config.txt"
+#define INFER_SGIE1_CONFIG_FILE "../dstensor_sgie1_config.txt"
+#define INFER_SGIE2_CONFIG_FILE "../dstensor_sgie2_config.txt"
+#define INFER_SGIE3_CONFIG_FILE "../dstensor_sgie3_config.txt"
 
 #define MAX_DISPLAY_LEN 64
 
