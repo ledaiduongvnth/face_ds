@@ -1,91 +1,34 @@
 #include <gst/gst.h>
 #include <glib.h>
-
 #include <math.h>
-
 #include <stdio.h>
 #include <string.h>
 #include "cuda_runtime_api.h"
-
 #include <opencv2/objdetect/objdetect.hpp>
-
 #include "gstnvdsmeta.h"
 #include "gstnvdsinfer.h"
-
 #include "nvdsinfer_custom_impl.h"
-#include "nvds_version.h"
-
-#define NVINFER_PLUGIN "nvinfer"
-#define NVINFERSERVER_PLUGIN "nvinferserver"
-
 #define INFER_PGIE_CONFIG_FILE  "../dstensor_pgie_config.txt"
 #define INFER_SGIE1_CONFIG_FILE "../dstensor_sgie1_config.txt"
 #define INFER_SGIE2_CONFIG_FILE "../dstensor_sgie2_config.txt"
 #define INFER_SGIE3_CONFIG_FILE "../dstensor_sgie3_config.txt"
-
-#define MAX_DISPLAY_LEN 64
-
 #define PGIE_CLASS_ID_VEHICLE 0
 #define PGIE_CLASS_ID_PERSON 2
-
 #define PGIE_DETECTED_CLASS_NUM 4
-
-/* The muxer output resolution must be set if the input streams will be of
- * different resolution. The muxer will scale all the input frames to this
- * resolution. */
 #define MUXER_OUTPUT_WIDTH 1280
 #define MUXER_OUTPUT_HEIGHT 720
-
 #define PGIE_NET_WIDTH 640
 #define PGIE_NET_HEIGHT 368
-
-/* Muxer batch formation timeout, for e.g. 40 millisec. Should ideally be set
- * based on the fastest source's framerate. */
 #define MUXER_BATCH_TIMEOUT_USEC 40000
-
 gint frame_number = 0;
-/* These are the strings of the labels for the respective models */
-const gchar sgie1_classes_str[12][32] = {
-        "black", "blue", "brown", "gold", "green",
-        "grey", "maroon", "orange", "red", "silver", "white", "yellow"
-};
-
-const gchar sgie2_classes_str[20][32] = {
-        "Acura", "Audi", "BMW", "Chevrolet", "Chrysler",
-        "Dodge", "Ford", "GMC", "Honda", "Hyundai", "Infiniti", "Jeep", "Kia",
-        "Lexus", "Mazda", "Mercedes", "Nissan",
-        "Subaru", "Toyota", "Volkswagen"
-};
-
-const gchar sgie3_classes_str[6][32] = {
-        "coupe", "largevehicle", "sedan", "suv",
-        "truck", "van"
-};
-
-const gchar pgie_classes_str[PGIE_DETECTED_CLASS_NUM][32] =
-        {"Vehicle", "TwoWheeler", "Person", "RoadSign"};
-
-/* gie_unique_id is one of the properties in the above dstensor_sgiex_config.txt
- * files. These should be unique and known when we want to parse the Metadata
- * respective to the sgie labels. Ideally these should be read from the config
- * files but for brevity we ensure they are same. */
-
+const gchar sgie1_classes_str[12][32] = {"black", "blue", "brown", "gold", "green","grey", "maroon", "orange", "red", "silver", "white", "yellow"};
+const gchar sgie2_classes_str[20][32] = {"Acura", "Audi", "BMW", "Chevrolet", "Chrysler","Dodge", "Ford", "GMC", "Honda", "Hyundai", "Infiniti", "Jeep", "Kia","Lexus", "Mazda", "Mercedes", "Nissan","Subaru", "Toyota", "Volkswagen"};
+const gchar sgie3_classes_str[6][32] = {"coupe", "largevehicle", "sedan", "suv", "truck", "van"};
+const gchar pgie_classes_str[PGIE_DETECTED_CLASS_NUM][32] = {"Vehicle", "TwoWheeler", "Person", "RoadSign"};
 const guint sgie1_unique_id = 2;
 const guint sgie2_unique_id = 3;
 const guint sgie3_unique_id = 4;
-
-/* nvds_lib_major_version and nvds_lib_minor_version is the version number of
- * deepstream sdk */
-
-unsigned int nvds_lib_major_version = NVDS_VERSION_MAJOR;
-unsigned int nvds_lib_minor_version = NVDS_VERSION_MINOR;
-
-/* This is the buffer probe function that we have registered on the sink pad
- * of the OSD element. All the infer elements in the pipeline shall attach
- * their metadata to the GstBuffer, here we will iterate & process the metadata
- * forex: class ids to strings, counting of class_id objects etc. */
-static GstPadProbeReturn osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info,
-                          gpointer u_data) {
+static GstPadProbeReturn osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
     GstBuffer *buf = (GstBuffer *) info->data;
     guint num_rects = 0;
     NvDsObjectMeta *obj_meta = NULL;
@@ -115,12 +58,12 @@ static GstPadProbeReturn osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo 
         display_meta = nvds_acquire_display_meta_from_pool(batch_meta);
         NvOSD_TextParams *txt_params = &display_meta->text_params[0];
         display_meta->num_labels = 1;
-        txt_params->display_text = (gchar *) g_malloc0(MAX_DISPLAY_LEN);
+        txt_params->display_text = (gchar *) g_malloc0(64);
         offset =
-                snprintf(txt_params->display_text, MAX_DISPLAY_LEN, "Person = %d ",
+                snprintf(txt_params->display_text, 64, "Person = %d ",
                          person_count);
         offset =
-                snprintf(txt_params->display_text + offset, MAX_DISPLAY_LEN,
+                snprintf(txt_params->display_text + offset, 64,
                          "Vehicle = %d ", vehicle_count);
 
         /* Now set the offsets where the string should appear */
@@ -152,19 +95,8 @@ static GstPadProbeReturn osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo 
     frame_number++;
     return GST_PAD_PROBE_OK;
 }
-
 extern "C"
-bool NvDsInferParseCustomResnet(std::vector<NvDsInferLayerInfo>
-                                const &outputLayersInfo, NvDsInferNetworkInfo const &networkInfo,
-                                NvDsInferParseDetectionParams const &detectionParams,
-                                std::vector<NvDsInferObjectDetectionInfo> &objectList);
-
-/* This is the buffer probe function that we have registered on the src pad
- * of the PGIE's next queue element. PGIE element in the pipeline shall attach
- * its NvDsInferTensorMeta to each frame metadata on GstBuffer, here we will
- * iterate & parse the tensor data to get detection bounding boxes. The result
- * would be attached as object-meta(NvDsObjectMeta) into the same frame metadata.
- */
+bool NvDsInferParseCustomResnet(std::vector<NvDsInferLayerInfo>const &outputLayersInfo, NvDsInferNetworkInfo const &networkInfo,NvDsInferParseDetectionParams const &detectionParams,std::vector<NvDsInferObjectDetectionInfo> &objectList);
 static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
     static guint use_device_mem = 0;
     static NvDsInferNetworkInfo networkInfo {PGIE_NET_WIDTH, PGIE_NET_HEIGHT, 3};
@@ -178,8 +110,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
             gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
 
     /* Iterate each frame metadata in batch */
-    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
-         l_frame = l_frame->next) {
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
 
         /* Iterate user metadata in frames to search PGIE's tensor metadata */
@@ -204,18 +135,15 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                     outputLayersInfo(meta->output_layers_info,
                                      meta->output_layers_info + meta->num_output_layers);
             std::vector<NvDsInferObjectDetectionInfo> objectList;
-            if (nvds_lib_major_version >= 5) {
-                if (meta->network_info.width != networkInfo.width ||
-                    meta->network_info.height != networkInfo.height ||
-                    meta->network_info.channels != networkInfo.channels) {
-                    g_error ("failed to check pgie network info\n");
-                }
+            if (meta->network_info.width != networkInfo.width ||
+                meta->network_info.height != networkInfo.height ||
+                meta->network_info.channels != networkInfo.channels) {
+                g_error ("failed to check pgie network info\n");
             }
             NvDsInferParseCustomResnet(outputLayersInfo, networkInfo, detectionParams, objectList);
 
             /* Seperate detection rectangles per class for grouping. */
-            std::vector<std::vector<
-                    cv::Rect >> objectListClasses(PGIE_DETECTED_CLASS_NUM);
+            std::vector<std::vector<cv::Rect >> objectListClasses(PGIE_DETECTED_CLASS_NUM);
             for (auto &obj:objectList) {
                 objectListClasses[obj.classId].emplace_back(obj.left, obj.top, obj.width, obj.height);
             }
@@ -277,13 +205,6 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     use_device_mem = 1 - use_device_mem;
     return GST_PAD_PROBE_OK;
 }
-
-/* This is the buffer probe function that we have registered on the sink pad
- * of the tiler element. All SGIE infer elements in the pipeline shall attach
- * their NvDsInferTensorMeta to each object's metadata of each frame, here we will
- * iterate & parse the tensor data to get classification confidence and labels.
- * The result would be attached as classifier_meta into its object's metadata.
- */
 static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
     static guint use_device_mem = 0;
 
@@ -388,7 +309,6 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     use_device_mem = 1 - use_device_mem;
     return GST_PAD_PROBE_OK;
 }
-
 static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
     GMainLoop *loop = (GMainLoop *) data;
     switch (GST_MESSAGE_TYPE (msg)) {
@@ -417,215 +337,98 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
 
 int main(int argc, char *argv[]) {
     GMainLoop *loop = NULL;
-    GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL, *queue =
-            NULL, *decoder = NULL, *streammux = NULL, *sink = NULL, *pgie =
-            NULL, *nvvidconv = NULL, *nvosd = NULL, *sgie1 = NULL, *sgie2 =
-            NULL, *sgie3 = NULL, *tiler =
-            NULL, *queue2, *queue3, *queue4, *queue5, *queue6;
-    g_print("With tracker\n");
+    GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL, *queue =NULL, *decoder = NULL, *streammux = NULL, *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL, *sgie1 = NULL, *sgie2 =NULL, *sgie3 = NULL, *tiler =NULL, *queue2, *queue3, *queue4, *queue5, *queue6;
     GstBus *bus = NULL;
     guint bus_watch_id = 0;
     GstPad *osd_sink_pad = NULL, *queue_src_pad = NULL, *tiler_sink_pad = NULL;
     guint i = 0;
-    std::vector<std::string> files;
-    gboolean is_nvinfer_server = FALSE;
-    const char *infer_plugin = NVINFER_PLUGIN;
-
-    files.emplace_back("/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/samples/streams/sample_720p.huuu");
-    is_nvinfer_server = false;
-
-
-    guint num_sources = files.size();
-    if (is_nvinfer_server) {
-        infer_plugin = NVINFERSERVER_PLUGIN;
-    }
-
-    nvds_version(&nvds_lib_major_version, &nvds_lib_minor_version);
-
-    /* Standard GStreamer initialization */
+    std::string file = "/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/samples/streams/sample_720p.huuu";
+    guint num_sources = 1;
     gst_init(&argc, &argv);
     loop = g_main_loop_new(NULL, FALSE);
-
-    /* Create gstreamer elements */
-
-    /* Create Pipeline element that will be a container of other elements */
     pipeline = gst_pipeline_new("dstensor-pipeline");
-
-
-    /* Create nvstreammux instance to form batches from one or more sources. */
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
-
     if (!pipeline || !streammux) {
         g_printerr("One element could not be created. Exiting.\n");
         return -1;
     }
-
-    /* Use nvinfer to run inferencing on decoder's output,
-     * behaviour of inferencing is set through config file */
-    pgie = gst_element_factory_make(infer_plugin, "primary-nvinference-engine");
-
+    pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
     queue = gst_element_factory_make("queue", NULL);
     queue2 = gst_element_factory_make("queue", NULL);
     queue3 = gst_element_factory_make("queue", NULL);
     queue4 = gst_element_factory_make("queue", NULL);
     queue5 = gst_element_factory_make("queue", NULL);
     queue6 = gst_element_factory_make("queue", NULL);
-
-    /* We need three secondary gies so lets create 3 more instances of
-       nvinfer */
-    sgie1 = gst_element_factory_make(infer_plugin, "secondary1-nvinference-engine");
-
-    sgie2 = gst_element_factory_make(infer_plugin, "secondary2-nvinference-engine");
-
-    sgie3 = gst_element_factory_make(infer_plugin, "secondary3-nvinference-engine");
-
-    /* Use convertor to convert from NV12 to RGBA as required by nvosd */
+    sgie1 = gst_element_factory_make("nvinfer", "secondary1-nvinference-engine");
+    sgie2 = gst_element_factory_make("nvinfer", "secondary2-nvinference-engine");
+    sgie3 = gst_element_factory_make("nvinfer", "secondary3-nvinference-engine");
     tiler = gst_element_factory_make("nvmultistreamtiler", "tiler");
-
-    /* Use convertor to convert from NV12 to RGBA as required by nvosd */
     nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
-
-    /* Create OSD to draw on the converted RGBA buffer */
     nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
-
-    /* Finally render the osd output */
-
     sink = gst_element_factory_make("nveglglessink", "nvvideo-renderer");
-
-    if (!pgie || !sgie1 || !sgie2 || !sgie3 || !nvvidconv || !nvosd || !sink ||
-        !tiler) {
+    if (!pgie || !sgie1 || !sgie2 || !sgie3 || !nvvidconv || !nvosd || !sink || !tiler) {
         g_printerr("One element could not be created. Exiting.\n");
         return -1;
     }
-
-
-    g_object_set(G_OBJECT (streammux), "width", MUXER_OUTPUT_WIDTH, "height",
-                 MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,
-                 "batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
-
-    /* Set all the necessary properties of the infer plugin element,
-     * Enable Output tensor meta, we can probe PGIE and
-     * SGIEs buffer to parse tensor output data of models */
-
-    /* nvinfer Output tensor meta can be enabled by set "output-tensor-meta=true"
-         * here or enable this attribute in config file. */
-    g_object_set(G_OBJECT (pgie), "config-file-path", INFER_PGIE_CONFIG_FILE,
-                 "output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
-    g_object_set(G_OBJECT (sgie1), "config-file-path", INFER_SGIE1_CONFIG_FILE,
-                 "output-tensor-meta", TRUE, "process-mode", 2, NULL);
-    g_object_set(G_OBJECT (sgie2), "config-file-path", INFER_SGIE2_CONFIG_FILE,
-                 "output-tensor-meta", TRUE, "process-mode", 2, NULL);
-    g_object_set(G_OBJECT (sgie3), "config-file-path", INFER_SGIE3_CONFIG_FILE,
-                 "output-tensor-meta", TRUE, "process-mode", 2, NULL);
-
+    g_object_set(G_OBJECT (streammux), "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
+    g_object_set(G_OBJECT (pgie), "config-file-path", INFER_PGIE_CONFIG_FILE,"output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
+    g_object_set(G_OBJECT (sgie1), "config-file-path", INFER_SGIE1_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
+    g_object_set(G_OBJECT (sgie2), "config-file-path", INFER_SGIE2_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
+    g_object_set(G_OBJECT (sgie3), "config-file-path", INFER_SGIE3_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
     guint rows = sqrt(num_sources);
-    g_object_set(G_OBJECT (tiler), "rows", rows, "columns",
-                 (guint) ceil(1.0 * num_sources / rows), "width", 1920, "height", 1080,
-                 NULL);
-
-    /* we add a message handler */
+    g_object_set(G_OBJECT (tiler), "rows", rows, "columns",(guint) ceil(1.0 * num_sources / rows), "width", 1920, "height", 1080,NULL);
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
-
-    /* Set up the pipeline */
-    /* we add all elements into the pipeline */
-    /* decoder | pgie1 | sgie1 | sgie2 | sgie3 | etc.. */
-
-    gst_bin_add_many(GST_BIN (pipeline),
-                     streammux, pgie, queue, sgie1, queue5, sgie2, queue6, sgie3, queue2,
-                     tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL);
-
+    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue, sgie1, queue5, sgie2, queue6, sgie3, queue2,tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL);
     for (i = 0; i < num_sources; i++) {
-        /* Source element for reading from the file */
         source = gst_element_factory_make("filesrc", NULL);
-
-        /* Since the data format in the input file is elementary h264 stream,
-         * we need a h264parser */
         h264parser = gst_element_factory_make("h264parse", NULL);
-
-        /* Use nvdec_h264 for hardware accelerated decode on GPU */
         decoder = gst_element_factory_make("nvv4l2decoder", NULL);
         gst_bin_add_many(GST_BIN (pipeline), source, h264parser, decoder, NULL);
-
         if (!source || !h264parser || !decoder) {
             g_printerr("One element could not be created. Exiting.\n");
             return -1;
         }
-
         GstPad *sinkpad, *srcpad;
         gchar pad_name_sink[16];
         sprintf(pad_name_sink, "sink_%d", i);
         gchar pad_name_src[16] = "src";
-
         sinkpad = gst_element_get_request_pad(streammux, pad_name_sink);
         if (!sinkpad) {
             g_printerr("Streammux request sink pad failed. Exiting.\n");
             return -1;
         }
-
         srcpad = gst_element_get_static_pad(decoder, pad_name_src);
         if (!srcpad) {
             g_printerr("Decoder request src pad failed. Exiting.\n");
             return -1;
         }
-
         if (gst_pad_link(srcpad, sinkpad) != GST_PAD_LINK_OK) {
             g_printerr("Failed to link decoder to stream muxer. Exiting.\n");
             return -1;
         }
-
         gst_object_unref(sinkpad);
         gst_object_unref(srcpad);
-
-        /* Link the elements together */
         if (!gst_element_link_many(source, h264parser, decoder, NULL)) {
             g_printerr("Elements could not be linked: 1. Exiting.\n");
             return -1;
         }
-        /* Set the input filename to the source element */
-        g_object_set(G_OBJECT (source), "location", files[i].c_str(), NULL);
+        g_object_set(G_OBJECT (source), "location", file.c_str(), NULL);
     }
-
     if (!gst_element_link_many(streammux, pgie, queue, sgie1, queue5, sgie2, queue6, sgie3, queue2, tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL)) {
         g_printerr("Elements could not be linked. Exiting.\n");
         return -1;
     }
-
-    /* Add probe to get informed of the meta data generated, we add probe to
-     * the sink pad of the osd element, since by that time, the buffer would have
-     * had got all the metadata. */
     osd_sink_pad = gst_element_get_static_pad(nvosd, "sink");
-    if (!osd_sink_pad)
-        g_print("Unable to get sink pad\n");
-    else
-        gst_pad_add_probe(osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, osd_sink_pad_buffer_probe, NULL, NULL);
-
-    /* Add probe to get informed of the meta data generated, we add probe to
-     * the source pad of PGIE's next queue element, since by that time, PGIE's
-     * buffer would have had got tensor metadata. */
+    gst_pad_add_probe(osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, osd_sink_pad_buffer_probe, NULL, NULL);
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
-
-    /* Add probe to get informed of the meta data generated, we add probe to
-     * the sink pad of tiler element which is just after all SGIE elements.
-     * Since by that time, GstBuffer would have had got all SGIEs tensor
-     * metadata. */
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
     gst_pad_add_probe(tiler_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, sgie_pad_buffer_probe, NULL, NULL);
-
-    /* Set the pipeline to "playing" state */
-    g_print("Now playing...\n");
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
-
-    /* Iterate */
-    g_print("Running...\n");
     g_main_loop_run(loop);
-
-    /* Out of the main loop, clean up nicely */
-    g_print("Returned, stopping playback\n");
     gst_element_set_state(pipeline, GST_STATE_NULL);
-    g_print("Deleting pipeline\n");
     gst_object_unref(GST_OBJECT (pipeline));
     g_source_remove(bus_watch_id);
     g_main_loop_unref(loop);
