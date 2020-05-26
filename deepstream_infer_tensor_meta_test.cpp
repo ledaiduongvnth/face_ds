@@ -28,73 +28,6 @@ const gchar pgie_classes_str[PGIE_DETECTED_CLASS_NUM][32] = {"Vehicle", "TwoWhee
 const guint sgie1_unique_id = 2;
 const guint sgie2_unique_id = 3;
 const guint sgie3_unique_id = 4;
-static GstPadProbeReturn osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
-    GstBuffer *buf = (GstBuffer *) info->data;
-    guint num_rects = 0;
-    NvDsObjectMeta *obj_meta = NULL;
-    guint vehicle_count = 0;
-    guint person_count = 0;
-    NvDsMetaList *l_frame = NULL;
-    NvDsMetaList *l_obj = NULL;
-    NvDsDisplayMeta *display_meta = NULL;
-
-    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
-
-    for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
-         l_frame = l_frame->next) {
-        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) (l_frame->data);
-        int offset = 0;
-        for (l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
-            obj_meta = (NvDsObjectMeta *) (l_obj->data);
-            if (obj_meta->class_id == PGIE_CLASS_ID_VEHICLE) {
-                vehicle_count++;
-                num_rects++;
-            }
-            if (obj_meta->class_id == PGIE_CLASS_ID_PERSON) {
-                person_count++;
-                num_rects++;
-            }
-        }
-        display_meta = nvds_acquire_display_meta_from_pool(batch_meta);
-        NvOSD_TextParams *txt_params = &display_meta->text_params[0];
-        display_meta->num_labels = 1;
-        txt_params->display_text = (gchar *) g_malloc0(64);
-        offset =
-                snprintf(txt_params->display_text, 64, "Person = %d ",
-                         person_count);
-        offset =
-                snprintf(txt_params->display_text + offset, 64,
-                         "Vehicle = %d ", vehicle_count);
-
-        /* Now set the offsets where the string should appear */
-        txt_params->x_offset = 10;
-        txt_params->y_offset = 12;
-
-        /* Font , font-color and font-size */
-        txt_params->font_params.font_name = (gchar *) "Serif";
-        txt_params->font_params.font_size = 10;
-        txt_params->font_params.font_color.red = 1.0;
-        txt_params->font_params.font_color.green = 1.0;
-        txt_params->font_params.font_color.blue = 1.0;
-        txt_params->font_params.font_color.alpha = 1.0;
-
-        /* Text background color */
-        txt_params->set_bg_clr = 1;
-        txt_params->text_bg_clr.red = 0.0;
-        txt_params->text_bg_clr.green = 0.0;
-        txt_params->text_bg_clr.blue = 0.0;
-        txt_params->text_bg_clr.alpha = 1.0;
-
-        nvds_add_display_meta_to_frame(frame_meta, display_meta);
-    }
-
-
-    g_print("Frame Number = %d Number of objects = %d "
-            "Vehicle Count = %d Person Count = %d\n",
-            frame_number, num_rects, vehicle_count, person_count);
-    frame_number++;
-    return GST_PAD_PROBE_OK;
-}
 extern "C"
 bool NvDsInferParseCustomResnet(std::vector<NvDsInferLayerInfo>const &outputLayersInfo, NvDsInferNetworkInfo const &networkInfo,NvDsInferParseDetectionParams const &detectionParams,std::vector<NvDsInferObjectDetectionInfo> &objectList);
 static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
@@ -309,6 +242,74 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     use_device_mem = 1 - use_device_mem;
     return GST_PAD_PROBE_OK;
 }
+static GstPadProbeReturn osd_sink_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
+    GstBuffer *buf = (GstBuffer *) info->data;
+    guint num_rects = 0;
+    NvDsObjectMeta *obj_meta = NULL;
+    guint vehicle_count = 0;
+    guint person_count = 0;
+    NvDsMetaList *l_frame = NULL;
+    NvDsMetaList *l_obj = NULL;
+    NvDsDisplayMeta *display_meta = NULL;
+
+    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
+
+    for (l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+         l_frame = l_frame->next) {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) (l_frame->data);
+        int offset = 0;
+        for (l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
+            obj_meta = (NvDsObjectMeta *) (l_obj->data);
+            if (obj_meta->class_id == PGIE_CLASS_ID_VEHICLE) {
+                vehicle_count++;
+                num_rects++;
+            }
+            if (obj_meta->class_id == PGIE_CLASS_ID_PERSON) {
+                person_count++;
+                num_rects++;
+            }
+        }
+        display_meta = nvds_acquire_display_meta_from_pool(batch_meta);
+        NvOSD_TextParams *txt_params = &display_meta->text_params[0];
+        display_meta->num_labels = 1;
+        txt_params->display_text = (gchar *) g_malloc0(64);
+        offset =
+                snprintf(txt_params->display_text, 64, "Person = %d ",
+                         person_count);
+        offset =
+                snprintf(txt_params->display_text + offset, 64,
+                         "Vehicle = %d ", vehicle_count);
+
+        /* Now set the offsets where the string should appear */
+        txt_params->x_offset = 10;
+        txt_params->y_offset = 12;
+
+        /* Font , font-color and font-size */
+        txt_params->font_params.font_name = (gchar *) "Serif";
+        txt_params->font_params.font_size = 10;
+        txt_params->font_params.font_color.red = 1.0;
+        txt_params->font_params.font_color.green = 1.0;
+        txt_params->font_params.font_color.blue = 1.0;
+        txt_params->font_params.font_color.alpha = 1.0;
+
+        /* Text background color */
+        txt_params->set_bg_clr = 1;
+        txt_params->text_bg_clr.red = 0.0;
+        txt_params->text_bg_clr.green = 0.0;
+        txt_params->text_bg_clr.blue = 0.0;
+        txt_params->text_bg_clr.alpha = 1.0;
+
+        nvds_add_display_meta_to_frame(frame_meta, display_meta);
+    }
+
+
+    g_print("Frame Number = %d Number of objects = %d "
+            "Vehicle Count = %d Person Count = %d\n",
+            frame_number, num_rects, vehicle_count, person_count);
+    frame_number++;
+    return GST_PAD_PROBE_OK;
+}
+
 static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
     GMainLoop *loop = (GMainLoop *) data;
     switch (GST_MESSAGE_TYPE (msg)) {
@@ -347,36 +348,35 @@ int main(int argc, char *argv[]) {
     gst_init(&argc, &argv);
     loop = g_main_loop_new(NULL, FALSE);
     pipeline = gst_pipeline_new("dstensor-pipeline");
+
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
-    if (!pipeline || !streammux) {
-        g_printerr("One element could not be created. Exiting.\n");
-        return -1;
-    }
+    g_object_set(G_OBJECT (streammux), "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
+
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
+    g_object_set(G_OBJECT (pgie), "config-file-path", INFER_PGIE_CONFIG_FILE,"output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
+
     queue = gst_element_factory_make("queue", NULL);
     queue2 = gst_element_factory_make("queue", NULL);
     queue3 = gst_element_factory_make("queue", NULL);
     queue4 = gst_element_factory_make("queue", NULL);
     queue5 = gst_element_factory_make("queue", NULL);
     queue6 = gst_element_factory_make("queue", NULL);
+
     sgie1 = gst_element_factory_make("nvinfer", "secondary1-nvinference-engine");
+    g_object_set(G_OBJECT (sgie1), "config-file-path", INFER_SGIE1_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
+
     sgie2 = gst_element_factory_make("nvinfer", "secondary2-nvinference-engine");
+    g_object_set(G_OBJECT (sgie2), "config-file-path", INFER_SGIE2_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
+
     sgie3 = gst_element_factory_make("nvinfer", "secondary3-nvinference-engine");
-    tiler = gst_element_factory_make("nvmultistreamtiler", "tiler");
+    g_object_set(G_OBJECT (sgie3), "config-file-path", INFER_SGIE3_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
+
     nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
     nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
     sink = gst_element_factory_make("nveglglessink", "nvvideo-renderer");
-    if (!pgie || !sgie1 || !sgie2 || !sgie3 || !nvvidconv || !nvosd || !sink || !tiler) {
-        g_printerr("One element could not be created. Exiting.\n");
-        return -1;
-    }
-    g_object_set(G_OBJECT (streammux), "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
-    g_object_set(G_OBJECT (pgie), "config-file-path", INFER_PGIE_CONFIG_FILE,"output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
-    g_object_set(G_OBJECT (sgie1), "config-file-path", INFER_SGIE1_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
-    g_object_set(G_OBJECT (sgie2), "config-file-path", INFER_SGIE2_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
-    g_object_set(G_OBJECT (sgie3), "config-file-path", INFER_SGIE3_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
-    guint rows = sqrt(num_sources);
-    g_object_set(G_OBJECT (tiler), "rows", rows, "columns",(guint) ceil(1.0 * num_sources / rows), "width", 1920, "height", 1080,NULL);
+    tiler = gst_element_factory_make("nvmultistreamtiler", "tiler");
+    g_object_set(G_OBJECT (tiler), "rows", 1, "columns",(guint) ceil(1.0 * num_sources / 1), "width", 1920, "height", 1080,NULL);
+
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
@@ -386,46 +386,25 @@ int main(int argc, char *argv[]) {
         h264parser = gst_element_factory_make("h264parse", NULL);
         decoder = gst_element_factory_make("nvv4l2decoder", NULL);
         gst_bin_add_many(GST_BIN (pipeline), source, h264parser, decoder, NULL);
-        if (!source || !h264parser || !decoder) {
-            g_printerr("One element could not be created. Exiting.\n");
-            return -1;
-        }
         GstPad *sinkpad, *srcpad;
         gchar pad_name_sink[16];
         sprintf(pad_name_sink, "sink_%d", i);
         gchar pad_name_src[16] = "src";
         sinkpad = gst_element_get_request_pad(streammux, pad_name_sink);
-        if (!sinkpad) {
-            g_printerr("Streammux request sink pad failed. Exiting.\n");
-            return -1;
-        }
         srcpad = gst_element_get_static_pad(decoder, pad_name_src);
-        if (!srcpad) {
-            g_printerr("Decoder request src pad failed. Exiting.\n");
-            return -1;
-        }
-        if (gst_pad_link(srcpad, sinkpad) != GST_PAD_LINK_OK) {
-            g_printerr("Failed to link decoder to stream muxer. Exiting.\n");
-            return -1;
-        }
+        gst_pad_link(srcpad, sinkpad);
         gst_object_unref(sinkpad);
         gst_object_unref(srcpad);
-        if (!gst_element_link_many(source, h264parser, decoder, NULL)) {
-            g_printerr("Elements could not be linked: 1. Exiting.\n");
-            return -1;
-        }
+        gst_element_link_many(source, h264parser, decoder, NULL);
         g_object_set(G_OBJECT (source), "location", file.c_str(), NULL);
     }
-    if (!gst_element_link_many(streammux, pgie, queue, sgie1, queue5, sgie2, queue6, sgie3, queue2, tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL)) {
-        g_printerr("Elements could not be linked. Exiting.\n");
-        return -1;
-    }
-    osd_sink_pad = gst_element_get_static_pad(nvosd, "sink");
-    gst_pad_add_probe(osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, osd_sink_pad_buffer_probe, NULL, NULL);
+    gst_element_link_many(streammux, pgie, queue, sgie1, queue5, sgie2, queue6, sgie3, queue2, tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL);
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
     gst_pad_add_probe(tiler_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, sgie_pad_buffer_probe, NULL, NULL);
+    osd_sink_pad = gst_element_get_static_pad(nvosd, "sink");
+    gst_pad_add_probe(osd_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, osd_sink_pad_buffer_probe, NULL, NULL);
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
     g_main_loop_run(loop);
     gst_element_set_state(pipeline, GST_STATE_NULL);
