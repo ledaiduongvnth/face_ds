@@ -1,23 +1,16 @@
 #include <gst/gst.h>
 #include <glib.h>
-
 #include <math.h>
-
 #include <stdio.h>
 #include <string.h>
 #include "cuda_runtime_api.h"
-
 #include <opencv2/objdetect/objdetect.hpp>
-
 #include "gstnvdsmeta.h"
 #include "gstnvdsinfer.h"
-
 #include "nvdsinfer_custom_impl.h"
 #include "nvds_version.h"
-
 #define NVINFER_PLUGIN "nvinfer"
 #define NVINFERSERVER_PLUGIN "nvinferserver"
-
 #define INFER_PGIE_CONFIG_FILE  "../dstensor_pgie_config.txt"
 #define INFER_SGIE1_CONFIG_FILE "../dstensor_sgie1_config.txt"
 #define INFER_SGIE2_CONFIG_FILE "../dstensor_sgie2_config.txt"
@@ -37,7 +30,7 @@
 #define MUXER_OUTPUT_HEIGHT 720
 
 #define PGIE_NET_WIDTH 640
-#define PGIE_NET_HEIGHT 368
+#define PGIE_NET_HEIGHT 640
 
 /* Muxer batch formation timeout, for e.g. 40 millisec. Should ideally be set
  * based on the fastest source's framerate. */

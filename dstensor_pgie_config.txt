@@ -60,10 +60,7 @@
 [property]
 gpu-id=0
 net-scale-factor=0.0039215697906911373
-model-engine-file=models/Primary_Detector/resnet10.caffemodel_b1_gpu0_int8.engine
-model-file=models/Primary_Detector/resnet10.caffemodel
-proto-file=models/Primary_Detector/resnet10.prototxt
-int8-calib-file=models/Primary_Detector/cal_trt.bin
+model-engine-file=/mnt/hdd/CLionProjects/vgate-control-camera-client/facedetect/model/retina.onnx.1.1.GPU.FP16.engine
 force-implicit-batch-dim=1
 batch-size=1
 network-mode=1
@@ -72,7 +69,7 @@ model-color-format=0
 num-detected-classes=4
 interval=0
 gie-unique-id=1
-output-blob-names=conv2d_bbox;conv2d_cov/Sigmoid
+output-blob-names=face_rpn_bbox_pred_stride32_Y;face_rpn_landmark_pred_stride32_Y;face_rpn_cls_prob_reshape_stride32_Reshape_Y;face_rpn_bbox_pred_stride16_Y;face_rpn_landmark_pred_stride16_Y;face_rpn_cls_prob_reshape_stride16_Reshape_Y;face_rpn_bbox_pred_stride8_Y;face_rpn_landmark_pred_stride8_Y;face_rpn_cls_prob_reshape_stride8_Reshape_Y
 
 ## 0=Detector, 1=Classifier, 2=Segmentation, 100=Other
 network-type=100
