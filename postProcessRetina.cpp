@@ -235,8 +235,8 @@ postProcessRetina::postProcessRetina(string &model, string network, float nms)
         std::cout << "please reconfig anchor_cfg" << network << std::endl;
     }
 
-    vector<int> outputW = {20, 40, 80};
-    vector<int> outputH = {20, 40, 80};
+    vector<int> outputW = {10, 20, 40};
+    vector<int> outputH = {10, 20, 40};
 
     bool dense_anchor = false;
     vector<vector<anchor_box>> anchors_fpn = generate_anchors_fpn(dense_anchor, cfg);
@@ -395,7 +395,7 @@ std::vector<FaceDetectInfo> postProcessRetina::nms(std::vector<FaceDetectInfo>& 
 
 void  postProcessRetina::detect(std::vector<std::vector<float>> results, float threshold, vector<FaceDetectInfo> &faceInfo, int model_size)
 {
-    vector<int> aaa = {20, 40, 80};
+    vector<int> aaa = {10, 20, 40};
 
     for(size_t i = 0; i < _feat_stride_fpn.size(); i++) {
         string key = "stride" + std::to_string(_feat_stride_fpn[i]);

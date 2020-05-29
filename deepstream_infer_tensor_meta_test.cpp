@@ -12,8 +12,8 @@
 
 #define INFER_PGIE_CONFIG_FILE  "../dstensor_pgie_config.txt"
 #define PGIE_DETECTED_CLASS_NUM 4
-#define MUXER_OUTPUT_WIDTH 640
-#define MUXER_OUTPUT_HEIGHT 640
+#define MUXER_OUTPUT_WIDTH 320
+#define MUXER_OUTPUT_HEIGHT 320
 #define PGIE_NET_WIDTH 320
 #define PGIE_NET_HEIGHT 320
 #define MUXER_BATCH_TIMEOUT_USEC 40000
@@ -29,11 +29,24 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
     std::vector<FaceDetectInfo> faceInfo;
     postProcessRetina rf =  postProcessRetina((string &) "model_path", "net3");
 
-    for (int i = 0; i < 9; i++) {
-        std::vector<float> outputi = std::vector<float>((float *) outputLayersInfo[i].buffer, (float *) outputLayersInfo[i].buffer + outputLayersInfo[i].inferDims.numElements);
-        results.emplace_back(outputi);
-    }
-    rf.detect(results, 0.3, faceInfo, PGIE_NET_WIDTH);
+//    for (int i = 0; i < 9; i++) {
+//        std::vector<float> outputi = std::vector<float>((float *) outputLayersInfo[i].buffer, (float *) outputLayersInfo[i].buffer + outputLayersInfo[i].inferDims.numElements);
+//        results.emplace_back(outputi);
+//    }
+
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[1].buffer, (float *) outputLayersInfo[1].buffer + outputLayersInfo[1].inferDims.numElements));
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[2].buffer, (float *) outputLayersInfo[2].buffer + outputLayersInfo[2].inferDims.numElements));
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[0].buffer, (float *) outputLayersInfo[0].buffer + outputLayersInfo[0].inferDims.numElements));
+
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[4].buffer, (float *) outputLayersInfo[4].buffer + outputLayersInfo[4].inferDims.numElements));
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[5].buffer, (float *) outputLayersInfo[5].buffer + outputLayersInfo[5].inferDims.numElements));
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[3].buffer, (float *) outputLayersInfo[3].buffer + outputLayersInfo[3].inferDims.numElements));
+
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[7].buffer, (float *) outputLayersInfo[7].buffer + outputLayersInfo[7].inferDims.numElements));
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[8].buffer, (float *) outputLayersInfo[8].buffer + outputLayersInfo[8].inferDims.numElements));
+    results.emplace_back(std::vector<float>((float *) outputLayersInfo[6].buffer, (float *) outputLayersInfo[6].buffer + outputLayersInfo[6].inferDims.numElements ));
+
+    rf.detect(results, 0.9, faceInfo, PGIE_NET_WIDTH);
     printf("size %zu\n", faceInfo.size());
     for (auto &i : faceInfo){
         printf("%f\n",i.score);
