@@ -424,25 +424,25 @@ void  postProcessRetina::detect(std::vector<std::vector<float>> results, float t
                 }
 
                 cv::Vec4f regress;
-                float dx = bbox_delta[j + count * (0 + num * 4)];
-                float dy = bbox_delta[j + count * (1 + num * 4)];
-                float dw = bbox_delta[j + count * (2 + num * 4)];
-                float dh = bbox_delta[j + count * (3 + num * 4)];
-                regress = cv::Vec4f(dx, dy, dw, dh);
-                anchor_box rect = bbox_pred(_anchors[key][j + count * num], regress);
-                clip_boxes(rect, model_size, model_size);
+//                float dx = bbox_delta[j + count * (0 + num * 4)];
+//                float dy = bbox_delta[j + count * (1 + num * 4)];
+//                float dw = bbox_delta[j + count * (2 + num * 4)];
+//                float dh = bbox_delta[j + count * (3 + num * 4)];
+//                regress = cv::Vec4f(dx, dy, dw, dh);
+//                anchor_box rect = bbox_pred(_anchors[key][j + count * num], regress);
+//                clip_boxes(rect, model_size, model_size);
 
                 FacePts pts;
-                for(size_t k = 0; k < 5; k++) {
-                    pts.x[k] = landmark_delta[j + count * (num * 10 + k * 2)];
-                    pts.y[k] = landmark_delta[j + count * (num * 10 + k * 2 + 1)];
-                }
-                FacePts landmarks = landmark_pred(_anchors[key][j + count * num], pts);
+//                for(size_t k = 0; k < 5; k++) {
+//                    pts.x[k] = landmark_delta[j + count * (num * 10 + k * 2)];
+//                    pts.y[k] = landmark_delta[j + count * (num * 10 + k * 2 + 1)];
+//                }
+//                FacePts landmarks = landmark_pred(_anchors[key][j + count * num], pts);
 
                 FaceDetectInfo tmp;
                 tmp.score = conf;
-                tmp.rect = rect;
-                tmp.pts = landmarks;
+//                tmp.rect = rect;
+//                tmp.pts = landmarks;
                 faceInfo.push_back(tmp);
             }
         }

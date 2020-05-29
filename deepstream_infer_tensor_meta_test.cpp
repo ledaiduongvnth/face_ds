@@ -12,10 +12,10 @@
 
 #define INFER_PGIE_CONFIG_FILE  "../dstensor_pgie_config.txt"
 #define PGIE_DETECTED_CLASS_NUM 4
-#define MUXER_OUTPUT_WIDTH 1280
-#define MUXER_OUTPUT_HEIGHT 720
-#define PGIE_NET_WIDTH 640
-#define PGIE_NET_HEIGHT 640
+#define MUXER_OUTPUT_WIDTH 640
+#define MUXER_OUTPUT_HEIGHT 640
+#define PGIE_NET_WIDTH 320
+#define PGIE_NET_HEIGHT 320
 #define MUXER_BATCH_TIMEOUT_USEC 40000
 
 
@@ -30,11 +30,14 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
     postProcessRetina rf =  postProcessRetina((string &) "model_path", "net3");
 
     for (int i = 0; i < 9; i++) {
-        std::vector<float> outputi = std::vector<float>((float *) outputLayersInfo[i].buffer, (float *) outputLayersInfo[i].buffer + outputLayersInfo[i].inferDims.numElements);
+        std::vector<float> outputi = std::vector<float>((float *) outputLayersInfo[i].buffer, (float *) outputLayersInfo[i].buffer + outputLayersInfo[i].inferDims.numElements*1);
         results.emplace_back(outputi);
     }
-    rf.detect(results, 0.1, faceInfo, 640);
+    rf.detect(results, 0.3, faceInfo, PGIE_NET_WIDTH);
     printf("size %zu\n", faceInfo.size());
+    for (auto &i : faceInfo){
+        printf("%f\n",i.score);
+    }
     return true;
 }
 
@@ -158,7 +161,7 @@ int main(int argc, char *argv[]){
     loop = g_main_loop_new(NULL, FALSE);
     pipeline = gst_pipeline_new("dstensor-pipeline");
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
-    g_object_set(G_OBJECT (streammux), "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
+    g_object_set(G_OBJECT (streammux),"enable-padding",TRUE, "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
     g_object_set(G_OBJECT (pgie), "config-file-path", INFER_PGIE_CONFIG_FILE,"output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
     queue = gst_element_factory_make("queue", NULL);
@@ -168,7 +171,7 @@ int main(int argc, char *argv[]){
     nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
     sink = gst_element_factory_make("nveglglessink", "nvvideo-renderer");
     tiler = gst_element_factory_make("nvmultistreamtiler", "tiler");
-    g_object_set(G_OBJECT (tiler), "rows", 1, "columns",(guint) ceil(1.0 * num_sources / 1), "width", 1920, "height", 1080,NULL);
+    g_object_set(G_OBJECT (tiler), "rows", 1, "columns",(guint) ceil(1.0 * num_sources / 1), "width", MUXER_OUTPUT_WIDTH, "height", MUXER_OUTPUT_HEIGHT,NULL);
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
