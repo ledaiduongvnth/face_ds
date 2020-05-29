@@ -30,7 +30,7 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
     postProcessRetina rf =  postProcessRetina((string &) "model_path", "net3");
 
     for (int i = 0; i < 9; i++) {
-        std::vector<float> outputi = std::vector<float>((float *) outputLayersInfo[i].buffer, (float *) outputLayersInfo[i].buffer + outputLayersInfo[i].inferDims.numElements*1);
+        std::vector<float> outputi = std::vector<float>((float *) outputLayersInfo[i].buffer, (float *) outputLayersInfo[i].buffer + outputLayersInfo[i].inferDims.numElements);
         results.emplace_back(outputi);
     }
     rf.detect(results, 0.3, faceInfo, PGIE_NET_WIDTH);
