@@ -393,7 +393,7 @@ std::vector<FaceDetectInfo> postProcessRetina::nms(std::vector<FaceDetectInfo>& 
 }
 
 
-void  postProcessRetina::detect(std::vector<std::vector<float>> results, float threshold, vector<FaceDetectInfo> &faceInfo, int model_size)
+void  postProcessRetina::detect(std::vector<std::vector<float>> results, float threshold, vector<FaceDetectInfo> &faceInfo, int model_size, int model_sizeh)
 {
     vector<int> aaa = {10, 20, 40};
 
@@ -430,7 +430,7 @@ void  postProcessRetina::detect(std::vector<std::vector<float>> results, float t
                 float dh = bbox_delta[j + count * (3 + num * 4)];
                 regress = cv::Vec4f(dx, dy, dw, dh);
                 anchor_box rect = bbox_pred(_anchors[key][j + count * num], regress);
-                clip_boxes(rect, model_size, model_size);
+                clip_boxes(rect, model_size, model_sizeh);
 
                 FacePts pts;
                 for(size_t k = 0; k < 5; k++) {

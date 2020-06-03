@@ -34,10 +34,17 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
         results.emplace_back(outputi);
     }
 
-    rf.detect(results, 0.9, faceInfo, PGIE_NET_WIDTH);
+    rf.detect(results, 0.9, faceInfo, PGIE_NET_WIDTH,PGIE_NET_HEIGHT);
     printf("size %zu\n", faceInfo.size());
     for (auto &i : faceInfo){
         printf("%f\n",i.score);
+        NvDsInferObjectDetectionInfo object;
+        object.left = i.rect.x1;
+        object.top = i.rect.y1;
+        object.height = i.rect.y2 - i.rect.y1;
+        object.width = i.rect.x2 - i.rect.x1;
+        objectList.push_back(object);
+
     }
     return true;
 }
@@ -66,56 +73,42 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
             std::vector<NvDsInferLayerInfo> outputLayersInfo(nvDSInferTensorMeta->output_layers_info,nvDSInferTensorMeta->output_layers_info + nvDSInferTensorMeta->num_output_layers);
             std::vector<NvDsInferObjectDetectionInfo> objectList;
             NvDsInferParseRetinaNet(outputLayersInfo, networkInfo, detectionParams, objectList);
-            std::vector<std::vector<cv::Rect >> objectListClasses(PGIE_DETECTED_CLASS_NUM);
-            for (auto &obj:objectList) {
-                objectListClasses[obj.classId].emplace_back(obj.left, obj.top, obj.width, obj.height);
-            }
-            for (uint32_t c = 0; c < objectListClasses.size(); ++c) {
-                auto &objlist = objectListClasses[c];
-                if (objlist.empty())
-                    continue;
 
-                /* Merge and cluster similar detection results */
-                cv::groupRectangles(objlist, 1, 0.2);
+            for (const auto &rect:objectList) {
+                NvDsObjectMeta *obj_meta = nvds_acquire_obj_meta_from_pool(nvDsBatchMeta);
+                obj_meta->unique_component_id = nvDSInferTensorMeta->unique_id;
+                obj_meta->confidence = 0.0;
 
-                /* Iterate final rectangules and attach result into frame's obj_meta_list. */
-                for (const auto &rect:objlist) {
-                    NvDsObjectMeta *obj_meta = nvds_acquire_obj_meta_from_pool(nvDsBatchMeta);
-                    obj_meta->unique_component_id = nvDSInferTensorMeta->unique_id;
-                    obj_meta->confidence = 0.0;
+                obj_meta->object_id = UNTRACKED_OBJECT_ID;
 
-                    obj_meta->object_id = UNTRACKED_OBJECT_ID;
-                    obj_meta->class_id = c;
+                NvOSD_RectParams &rect_params = obj_meta->rect_params;
+                NvOSD_TextParams &text_params = obj_meta->text_params;
 
-                    NvOSD_RectParams &rect_params = obj_meta->rect_params;
-                    NvOSD_TextParams &text_params = obj_meta->text_params;
+                /* Assign bounding box coordinates. */
+                rect_params.left = rect.left * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
+                rect_params.top = rect.top * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
+                rect_params.width = rect.width * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
+                rect_params.height =rect.height * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
 
-                    /* Assign bounding box coordinates. */
-                    rect_params.left = rect.x * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
-                    rect_params.top = rect.y * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
-                    rect_params.width = rect.width * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
-                    rect_params.height =rect.height * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
+                /* Border of width 3. */
+                rect_params.border_width = 3;
+                rect_params.has_bg_color = 0;
+                rect_params.border_color = (NvOSD_ColorParams) {1, 0, 0, 1};
 
-                    /* Border of width 3. */
-                    rect_params.border_width = 3;
-                    rect_params.has_bg_color = 0;
-                    rect_params.border_color = (NvOSD_ColorParams) {1, 0, 0, 1};
-
-                    /* display_text requires heap allocated memory. */
-                    /* Display text above the left top corner of the object. */
-                    text_params.x_offset = rect_params.left;
-                    text_params.y_offset = rect_params.top - 10;
-                    /* Set black background for the text. */
-                    text_params.set_bg_clr = 1;
-                    text_params.text_bg_clr = (NvOSD_ColorParams) {
-                            0, 0, 0, 1};
-                    /* Font face, size and color. */
-                    text_params.font_params.font_name = (gchar *) "Serif";
-                    text_params.font_params.font_size = 11;
-                    text_params.font_params.font_color = (NvOSD_ColorParams) {
-                            1, 1, 1, 1};
-                    nvds_add_obj_meta_to_frame(nvDsFrameMeta, obj_meta, NULL);
-                }
+                /* display_text requires heap allocated memory. */
+                /* Display text above the left top corner of the object. */
+                text_params.x_offset = rect_params.left;
+                text_params.y_offset = rect_params.top - 10;
+                /* Set black background for the text. */
+                text_params.set_bg_clr = 1;
+                text_params.text_bg_clr = (NvOSD_ColorParams) {
+                        0, 0, 0, 1};
+                /* Font face, size and color. */
+                text_params.font_params.font_name = (gchar *) "Serif";
+                text_params.font_params.font_size = 11;
+                text_params.font_params.font_color = (NvOSD_ColorParams) {
+                        1, 1, 1, 1};
+                nvds_add_obj_meta_to_frame(nvDsFrameMeta, obj_meta, NULL);
             }
         }
     }
