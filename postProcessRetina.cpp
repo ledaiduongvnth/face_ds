@@ -400,15 +400,15 @@ void  postProcessRetina::detect(std::vector<std::vector<float>> results, float t
     for(size_t i = 0; i < _feat_stride_fpn.size(); i++) {
         string key = "stride" + std::to_string(_feat_stride_fpn[i]);
 
-        std::vector<float> score = results[i*3+2];
+        std::vector<float> score = results[i*3];
         std::vector<float>::iterator begin = score.begin() + score.size() / 2;
         std::vector<float>::iterator end = score.end();
         score = std::vector<float>(begin, end);
 
-        std::vector<float> bbox_delta = results[i*3+0];
+        std::vector<float> bbox_delta = results[i*3+1];
 
 
-        std::vector<float> landmark_delta = results[i*3+1];
+        std::vector<float> landmark_delta = results[i*3+2];
 
         int width = aaa[i];
         int height = aaa[i];
