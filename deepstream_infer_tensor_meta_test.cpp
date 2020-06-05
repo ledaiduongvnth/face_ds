@@ -10,8 +10,6 @@
 #include "nvdsinfer_custom_impl.h"
 #define INFER_PGIE_CONFIG_FILE  "../dstensor_pgie_config.txt"
 #define INFER_SGIE1_CONFIG_FILE "../dstensor_sgie1_config.txt"
-#define INFER_SGIE2_CONFIG_FILE "../dstensor_sgie2_config.txt"
-#define INFER_SGIE3_CONFIG_FILE "../dstensor_sgie3_config.txt"
 #define PGIE_CLASS_ID_VEHICLE 0
 #define PGIE_CLASS_ID_PERSON 2
 #define PGIE_DETECTED_CLASS_NUM 4
@@ -338,7 +336,7 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
 
 int main(int argc, char *argv[]) {
     GMainLoop *loop = NULL;
-    GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL, *queue =NULL, *decoder = NULL, *streammux = NULL, *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL, *sgie1 = NULL, *sgie2 =NULL, *sgie3 = NULL, *tiler =NULL, *queue2, *queue3, *queue4, *queue5, *queue6;
+    GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL, *queue =NULL, *decoder = NULL, *streammux = NULL, *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL, *sgie1 = NULL, *tiler =NULL, *queue2, *queue3, *queue4;
     GstBus *bus = NULL;
     guint bus_watch_id = 0;
     GstPad *osd_sink_pad = NULL, *queue_src_pad = NULL, *tiler_sink_pad = NULL;
@@ -359,17 +357,10 @@ int main(int argc, char *argv[]) {
     queue2 = gst_element_factory_make("queue", NULL);
     queue3 = gst_element_factory_make("queue", NULL);
     queue4 = gst_element_factory_make("queue", NULL);
-    queue5 = gst_element_factory_make("queue", NULL);
-    queue6 = gst_element_factory_make("queue", NULL);
 
     sgie1 = gst_element_factory_make("nvinfer", "secondary1-nvinference-engine");
     g_object_set(G_OBJECT (sgie1), "config-file-path", INFER_SGIE1_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
 
-    sgie2 = gst_element_factory_make("nvinfer", "secondary2-nvinference-engine");
-    g_object_set(G_OBJECT (sgie2), "config-file-path", INFER_SGIE2_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
-
-    sgie3 = gst_element_factory_make("nvinfer", "secondary3-nvinference-engine");
-    g_object_set(G_OBJECT (sgie3), "config-file-path", INFER_SGIE3_CONFIG_FILE,"output-tensor-meta", TRUE, "process-mode", 2, NULL);
 
     nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
     nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
@@ -380,7 +371,7 @@ int main(int argc, char *argv[]) {
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
-    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue, sgie1, queue5, sgie2, queue6, sgie3, queue2,tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL);
+    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue, sgie1, queue2,tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL);
     for (i = 0; i < num_sources; i++) {
         source = gst_element_factory_make("filesrc", NULL);
         h264parser = gst_element_factory_make("h264parse", NULL);
@@ -398,7 +389,7 @@ int main(int argc, char *argv[]) {
         gst_element_link_many(source, h264parser, decoder, NULL);
         g_object_set(G_OBJECT (source), "location", file.c_str(), NULL);
     }
-    gst_element_link_many(streammux, pgie, queue, sgie1, queue5, sgie2, queue6, sgie3, queue2, tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL);
+    gst_element_link_many(streammux, pgie, queue, sgie1, queue2, tiler, queue3, nvvidconv, queue4, nvosd, sink, NULL);
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
