@@ -41,7 +41,6 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
         object.height = i.rect.y2 - i.rect.y1;
         object.width = i.rect.x2 - i.rect.x1;
         objectList.push_back(object);
-
     }
     return true;
 }
