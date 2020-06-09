@@ -1,0 +1,13 @@
+[property]
+gpu-id=0
+onnx-file=/mnt/hdd/CLionProjects/face_ds/models/arcfaceresnet100-8.onnx
+batch-size=1
+network-mode=2
+input-object-min-width=64
+input-object-min-height=64
+process-mode=2
+gie-unique-id=2
+operate-on-gie-id=1
+network-type=100
+output-tensor-meta=1
+

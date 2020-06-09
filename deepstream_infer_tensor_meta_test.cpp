@@ -114,44 +114,32 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
 }
 
 void print(std::vector <float> const &a) {
-    std::cout << "The vector elements are : ";
-
     for(int i=0; i < a.size(); i++)
         std::cout << a.at(i) << ' ';
+    printf("\n");
 }
 static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
     static guint use_device_mem = 0;
-
-    NvDsBatchMeta *batch_meta =
-            gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
-
+    printf("--------------------------------------------\n");
+    NvDsBatchMeta *batch_meta =gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
     /* Iterate each frame metadata in batch */
-    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
-         l_frame = l_frame->next) {
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
-
         /* Iterate object metadata in frame */
-        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;
-             l_obj = l_obj->next) {
+        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *) l_obj->data;
-
             /* Iterate user metadata in object to search SGIE's tensor data */
-            for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL;
-                 l_user = l_user->next) {
+            for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
                 NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
                 if (user_meta->base_meta.meta_type != NVDSINFER_TENSOR_OUTPUT_META)
                     continue;
-
-                /* convert to tensor metadata */
-                NvDsInferTensorMeta *meta =
-                        (NvDsInferTensorMeta *) user_meta->user_meta_data;
-
+                NvDsInferTensorMeta *meta = (NvDsInferTensorMeta *) user_meta->user_meta_data;
                 for (unsigned int i = 0; i < meta->num_output_layers; i++) {
                     NvDsInferLayerInfo *info = &meta->output_layers_info[i];
                     info->buffer = meta->out_buf_ptrs_host[i];
                     if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
-                        cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements * 4, cudaMemcpyDeviceToHost);
-                        std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements*4);
+                        cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements, cudaMemcpyDeviceToHost);
+                        std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
                         print(outputi);
                     }
                 }
@@ -212,12 +200,7 @@ int main(int argc, char *argv[]){
     queue3 = gst_element_factory_make("queue", NULL);
     queue4 = gst_element_factory_make("queue", NULL);
     sgie1 = gst_element_factory_make("nvinferonnx", "secondary1-nvinference-engine");
-    if (!sgie1 ) {
-        g_printerr("One element could not be created. Exiting.\n");
-        return -1;
-    }
     g_object_set(G_OBJECT (sgie1), "config-file-path", "../models/sgie.txt","output-tensor-meta", TRUE, "process-mode", 2, NULL);
-
     nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
     nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
     sink = gst_element_factory_make("nveglglessink", "nvvideo-renderer");
@@ -234,7 +217,6 @@ int main(int argc, char *argv[]){
         gst_bin_add_many(GST_BIN (pipeline), source, h264parser, decoder, NULL);
         GstPad *sinkpad, *srcpad;
         gchar pad_name_sink[16];
-
         sprintf(pad_name_sink, "sink_%d", i);
         gchar pad_name_src[16] = "src";
         sinkpad = gst_element_get_request_pad(streammux, pad_name_sink);
