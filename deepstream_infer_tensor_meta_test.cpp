@@ -9,7 +9,6 @@
 #include "nvdsinfer_custom_impl.h"
 #include "postProcessRetina.h"
 
-#define INFER_PGIE_CONFIG_FILE  "../dstensor_pgie_config.txt"
 #define MUXER_OUTPUT_WIDTH 1280
 #define MUXER_OUTPUT_HEIGHT 1280
 #define PGIE_NET_WIDTH 640
@@ -114,6 +113,56 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     return GST_PAD_PROBE_OK;
 }
 
+void print(std::vector <float> const &a) {
+    std::cout << "The vector elements are : ";
+
+    for(int i=0; i < a.size(); i++)
+        std::cout << a.at(i) << ' ';
+}
+static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *info, gpointer u_data) {
+    static guint use_device_mem = 0;
+
+    NvDsBatchMeta *batch_meta =
+            gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
+
+    /* Iterate each frame metadata in batch */
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL;
+         l_frame = l_frame->next) {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
+
+        /* Iterate object metadata in frame */
+        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL;
+             l_obj = l_obj->next) {
+            NvDsObjectMeta *obj_meta = (NvDsObjectMeta *) l_obj->data;
+
+            /* Iterate user metadata in object to search SGIE's tensor data */
+            for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL;
+                 l_user = l_user->next) {
+                NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
+                if (user_meta->base_meta.meta_type != NVDSINFER_TENSOR_OUTPUT_META)
+                    continue;
+
+                /* convert to tensor metadata */
+                NvDsInferTensorMeta *meta =
+                        (NvDsInferTensorMeta *) user_meta->user_meta_data;
+
+                for (unsigned int i = 0; i < meta->num_output_layers; i++) {
+                    NvDsInferLayerInfo *info = &meta->output_layers_info[i];
+                    info->buffer = meta->out_buf_ptrs_host[i];
+                    if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
+                        cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements * 4, cudaMemcpyDeviceToHost);
+                        std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements*4);
+                        print(outputi);
+                    }
+                }
+            }
+        }
+    }
+
+    use_device_mem = 1 - use_device_mem;
+    return GST_PAD_PROBE_OK;
+}
+
 static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
     GMainLoop *loop = (GMainLoop *) data;
     switch (GST_MESSAGE_TYPE (msg)) {
@@ -142,10 +191,12 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
 
 int main(int argc, char *argv[]){
     GMainLoop *loop = NULL;
-    GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL, *queue =NULL, *decoder = NULL, *streammux = NULL, *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL,  *tiler =NULL, *queue2, *queue3;
+    GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL, *queue =NULL, *decoder = NULL, *streammux = NULL, *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL,  *tiler =NULL, *queue2, *queue3, *queue4, *sgie1;
     GstBus *bus = NULL;
     guint bus_watch_id = 0;
     GstPad *queue_src_pad = NULL;
+    GstPad *tiler_sink_pad = NULL;
+
     guint i = 0;
     std::string file = "/home/d/Downloads/output.h264";
     guint num_sources = 1;
@@ -155,10 +206,18 @@ int main(int argc, char *argv[]){
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
     g_object_set(G_OBJECT (streammux),"enable-padding",TRUE, "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
-    g_object_set(G_OBJECT (pgie), "config-file-path", INFER_PGIE_CONFIG_FILE,"output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
+    g_object_set(G_OBJECT (pgie), "config-file-path", "../models/pgie.txt","output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
     queue = gst_element_factory_make("queue", NULL);
     queue2 = gst_element_factory_make("queue", NULL);
     queue3 = gst_element_factory_make("queue", NULL);
+    queue4 = gst_element_factory_make("queue", NULL);
+    sgie1 = gst_element_factory_make("nvinferonnx", "secondary1-nvinference-engine");
+    if (!sgie1 ) {
+        g_printerr("One element could not be created. Exiting.\n");
+        return -1;
+    }
+    g_object_set(G_OBJECT (sgie1), "config-file-path", "../models/sgie.txt","output-tensor-meta", TRUE, "process-mode", 2, NULL);
+
     nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
     nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
     sink = gst_element_factory_make("nveglglessink", "nvvideo-renderer");
@@ -167,7 +226,7 @@ int main(int argc, char *argv[]){
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
-    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue,tiler, queue2, nvvidconv, queue3, nvosd, sink, NULL);
+    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue,sgie1,queue4, tiler, queue2, nvvidconv, queue3, nvosd, sink, NULL);
     for (i = 0; i < num_sources; i++){
         source = gst_element_factory_make("filesrc", NULL);
         h264parser = gst_element_factory_make("h264parse", NULL);
@@ -175,6 +234,7 @@ int main(int argc, char *argv[]){
         gst_bin_add_many(GST_BIN (pipeline), source, h264parser, decoder, NULL);
         GstPad *sinkpad, *srcpad;
         gchar pad_name_sink[16];
+
         sprintf(pad_name_sink, "sink_%d", i);
         gchar pad_name_src[16] = "src";
         sinkpad = gst_element_get_request_pad(streammux, pad_name_sink);
@@ -185,9 +245,11 @@ int main(int argc, char *argv[]){
         gst_element_link_many(source, h264parser, decoder, NULL);
         g_object_set(G_OBJECT (source), "location", file.c_str(), NULL);
     }
-    gst_element_link_many(streammux, pgie, queue, tiler, queue2, nvvidconv, queue3, nvosd, sink, NULL);
+    gst_element_link_many(streammux, pgie, queue, sgie1, queue4, tiler, queue2, nvvidconv, queue3, nvosd, sink, NULL);
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
+    tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
+    gst_pad_add_probe(tiler_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, sgie_pad_buffer_probe, NULL, NULL);
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
     g_main_loop_run(loop);
     gst_element_set_state(pipeline, GST_STATE_NULL);
