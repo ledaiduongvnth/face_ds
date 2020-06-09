@@ -235,8 +235,8 @@ postProcessRetina::postProcessRetina(string &model, string network, float nms)
         std::cout << "please reconfig anchor_cfg" << network << std::endl;
     }
 
-    vector<int> outputW = {10, 20, 40};
-    vector<int> outputH = {10, 20, 40};
+    vector<int> outputW = {20, 40, 80};
+    vector<int> outputH = {20, 40, 80};
 
     bool dense_anchor = false;
     vector<vector<anchor_box>> anchors_fpn = generate_anchors_fpn(dense_anchor, cfg);
@@ -393,22 +393,22 @@ std::vector<FaceDetectInfo> postProcessRetina::nms(std::vector<FaceDetectInfo>& 
 }
 
 
-void  postProcessRetina::detect(std::vector<std::vector<float>> results, float threshold, vector<FaceDetectInfo> &faceInfo, int model_size, int model_sizeh)
+void  postProcessRetina::detect(std::vector<std::vector<float>> results, float threshold, vector<FaceDetectInfo> &faceInfo, int model_size)
 {
-    vector<int> aaa = {10, 20, 40};
+    vector<int> aaa = {20, 40, 80};
 
     for(size_t i = 0; i < _feat_stride_fpn.size(); i++) {
         string key = "stride" + std::to_string(_feat_stride_fpn[i]);
 
-        std::vector<float> score = results[i*3];
+        std::vector<float> score = results[i*3+2];
         std::vector<float>::iterator begin = score.begin() + score.size() / 2;
         std::vector<float>::iterator end = score.end();
         score = std::vector<float>(begin, end);
 
-        std::vector<float> bbox_delta = results[i*3+1];
+        std::vector<float> bbox_delta = results[i*3+0];
 
 
-        std::vector<float> landmark_delta = results[i*3+2];
+        std::vector<float> landmark_delta = results[i*3+1];
 
         int width = aaa[i];
         int height = aaa[i];
@@ -430,7 +430,7 @@ void  postProcessRetina::detect(std::vector<std::vector<float>> results, float t
                 float dh = bbox_delta[j + count * (3 + num * 4)];
                 regress = cv::Vec4f(dx, dy, dw, dh);
                 anchor_box rect = bbox_pred(_anchors[key][j + count * num], regress);
-                clip_boxes(rect, model_size, model_sizeh);
+                clip_boxes(rect, model_size, model_size);
 
                 FacePts pts;
                 for(size_t k = 0; k < 5; k++) {

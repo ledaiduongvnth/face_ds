@@ -4,18 +4,16 @@
 #include <stdio.h>
 #include <string.h>
 #include "cuda_runtime_api.h"
-#include <opencv2/objdetect/objdetect.hpp>
 #include "gstnvdsmeta.h"
 #include "gstnvdsinfer.h"
 #include "nvdsinfer_custom_impl.h"
 #include "postProcessRetina.h"
 
 #define INFER_PGIE_CONFIG_FILE  "../dstensor_pgie_config.txt"
-#define PGIE_DETECTED_CLASS_NUM 4
 #define MUXER_OUTPUT_WIDTH 1280
 #define MUXER_OUTPUT_HEIGHT 1280
-#define PGIE_NET_WIDTH 320
-#define PGIE_NET_HEIGHT 320
+#define PGIE_NET_WIDTH 640
+#define PGIE_NET_HEIGHT 640
 #define MUXER_BATCH_TIMEOUT_USEC 40000
 
 
@@ -34,7 +32,7 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
         results.emplace_back(outputi);
     }
 
-    rf.detect(results, 0.9, faceInfo, PGIE_NET_WIDTH,PGIE_NET_HEIGHT);
+    rf.detect(results, 0.9, faceInfo, PGIE_NET_WIDTH);
     printf("size %zu\n", faceInfo.size());
     for (auto &i : faceInfo){
         printf("%f\n",i.score);

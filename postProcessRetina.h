@@ -63,7 +63,7 @@ public:
     postProcessRetina(string &model, string network = "net3", float nms = 0.4);
     ~postProcessRetina();
 
-    void detect(std::vector<std::vector<float>> results, float threshold, vector<FaceDetectInfo> &faceInfo, int model_size, int model_sizeh);
+    void detect(std::vector<std::vector<float>> results, float threshold, vector<FaceDetectInfo> &faceInfo, int model_size);
 private:
     anchor_box bbox_pred(anchor_box anchor, cv::Vec4f regress);
     vector<anchor_box> bbox_pred(vector<anchor_box> anchors, vector<cv::Vec4f> regress);
