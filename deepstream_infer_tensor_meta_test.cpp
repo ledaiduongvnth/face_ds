@@ -32,7 +32,7 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
         results.emplace_back(outputi);
     }
 
-    rf.detect(results, 0.9, faceInfo, PGIE_NET_WIDTH);
+    rf.detect(results, 0.5, faceInfo, PGIE_NET_WIDTH);
     printf("size %zu\n", faceInfo.size());
     for (auto &i : faceInfo){
         printf("%f\n",i.score);

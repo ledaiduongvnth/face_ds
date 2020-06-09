@@ -37,12 +37,12 @@
 
 [property]
 gpu-id=0
-network_mode=2
-model-color-format=1
-onnx-file=models/retina.onnx
-batch-size=1
+
+model-file=/mnt/hdd/CLionProjects/face_ds/models/mnet.caffemodel
+proto-file=/mnt/hdd/CLionProjects/face_ds/models/mnet.prototxt.txt
 force-implicit-batch-dim=1
 gie-unique-id=1
+output-blob-names=face_rpn_bbox_pred_stride32;face_rpn_landmark_pred_stride32;face_rpn_cls_prob_reshape_stride32;face_rpn_bbox_pred_stride16;face_rpn_landmark_pred_stride16;face_rpn_cls_prob_reshape_stride16;face_rpn_bbox_pred_stride8;face_rpn_landmark_pred_stride8;face_rpn_cls_prob_reshape_stride8
 
 ## 0=Detector, 1=Classifier, 2=Segmentation, 100=Other
 network-type=100
