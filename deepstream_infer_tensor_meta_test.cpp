@@ -40,6 +40,19 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
         object.top = i.rect.y1;
         object.height = i.rect.y2 - i.rect.y1;
         object.width = i.rect.x2 - i.rect.x1;
+        object.landmarks[0] = i.pts.x[0];
+        object.landmarks[2] = i.pts.x[1];
+        object.landmarks[4] = i.pts.x[2];
+        object.landmarks[6] = i.pts.x[3];
+        object.landmarks[8] = i.pts.x[4];
+        object.landmarks[1] = i.pts.y[0];
+        object.landmarks[3] = i.pts.y[1];
+        object.landmarks[5] = i.pts.y[2];
+        object.landmarks[7] = i.pts.y[3];
+        object.landmarks[9] = i.pts.y[4];
+
+        printf("Landmark: %f\n", object.landmarks[5]);
+
         objectList.push_back(object);
     }
     return true;
@@ -70,7 +83,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
             std::vector<NvDsInferObjectDetectionInfo> objectList;
             NvDsInferParseRetinaNet(outputLayersInfo, networkInfo, detectionParams, objectList);
 
-            for (const auto &rect:objectList) {
+            for (const auto &object:objectList) {
                 NvDsObjectMeta *obj_meta = nvds_acquire_obj_meta_from_pool(nvDsBatchMeta);
                 obj_meta->unique_component_id = nvDSInferTensorMeta->unique_id;
                 obj_meta->confidence = 0.0;
@@ -79,12 +92,12 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
 
                 NvOSD_RectParams &rect_params = obj_meta->rect_params;
                 NvOSD_TextParams &text_params = obj_meta->text_params;
-
+                printf("Landmark: %f\n", object.landmarks[5]);
                 /* Assign bounding box coordinates. */
-                rect_params.left = rect.left * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
-                rect_params.top = rect.top * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
-                rect_params.width = rect.width * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
-                rect_params.height =rect.height * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
+                rect_params.left = object.left * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
+                rect_params.top = object.top * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
+                rect_params.width = object.width * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
+                rect_params.height = object.height * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
 
                 /* Border of width 3. */
                 rect_params.border_width = 3;
