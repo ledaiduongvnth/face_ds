@@ -13,7 +13,6 @@
 #define MUXER_OUTPUT_HEIGHT 1280
 #define PGIE_NET_WIDTH 640
 #define PGIE_NET_HEIGHT 640
-#define MUXER_BATCH_TIMEOUT_USEC 40000
 
 
 extern "C"
@@ -30,11 +29,8 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
         std::vector<float> outputi = std::vector<float>((float *) outputLayersInfo[i].buffer, (float *) outputLayersInfo[i].buffer + outputLayersInfo[i].inferDims.numElements);
         results.emplace_back(outputi);
     }
-
     rf.detect(results, 0.5, faceInfo, PGIE_NET_WIDTH);
-    printf("size %zu\n", faceInfo.size());
     for (auto &i : faceInfo){
-        printf("%f\n",i.score);
         NvDsInferObjectDetectionInfo object;
         object.left = i.rect.x1;
         object.top = i.rect.y1;
@@ -50,9 +46,6 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
         object.landmarks[5] = i.pts.y[2];
         object.landmarks[7] = i.pts.y[3];
         object.landmarks[9] = i.pts.y[4];
-
-        printf("Landmark: %f\n", object.landmarks[5]);
-
         objectList.push_back(object);
     }
     return true;
@@ -92,7 +85,10 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
 
                 NvOSD_RectParams &rect_params = obj_meta->rect_params;
                 NvOSD_TextParams &text_params = obj_meta->text_params;
-                printf("Landmark: %f\n", object.landmarks[5]);
+
+                for(int i=0; i < 10; i++) {
+                    text_params.landmark[i] = object.landmarks[i];
+                }
                 /* Assign bounding box coordinates. */
                 rect_params.left = object.left * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
                 rect_params.top = object.top * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
@@ -140,6 +136,10 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
         /* Iterate object metadata in frame */
         for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *) l_obj->data;
+            //infor landmark in primary detector
+            for(int i=0; i < 10; i++) {
+                printf("landmarks: %f\n", obj_meta->text_params.landmark[i]);
+            }
             /* Iterate user metadata in object to search SGIE's tensor data */
             for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
                 NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
@@ -204,7 +204,7 @@ int main(int argc, char *argv[]){
     loop = g_main_loop_new(NULL, FALSE);
     pipeline = gst_pipeline_new("dstensor-pipeline");
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
-    g_object_set(G_OBJECT (streammux),"enable-padding",TRUE, "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
+    g_object_set(G_OBJECT (streammux),"enable-padding",TRUE, "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources, NULL);
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
     g_object_set(G_OBJECT (pgie), "config-file-path", "../models/pgie.txt","output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
     queue = gst_element_factory_make("queue", NULL);
