@@ -1,6 +1,7 @@
 [property]
 gpu-id=0
-onnx-file=/mnt/hdd/CLionProjects/face_ds/models/arcfaceresnet100-8.onnx
+#onnx-file=/mnt/hdd/CLionProjects/face_ds/models/arcfaceresnet100-8.onnx
+model-engine-file=/mnt/hdd/CLionProjects/face_ds/models/arcfaceresnet100-8.onnx_b1_gpu0_fp16.engine
 batch-size=1
 network-mode=2
 input-object-min-width=112

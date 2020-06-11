@@ -14,6 +14,36 @@
 #define PGIE_NET_WIDTH 640
 #define PGIE_NET_HEIGHT 640
 #define MUXER_BATCH_TIMEOUT_USEC 40000
+#define NVDS_USER_FRAME_META_EXAMPLE (nvds_get_user_meta_type("NVIDIA.NVINFER.USER_META"))
+#define USER_ARRAY_SIZE 10
+
+void *set_metadata_ptr(int landmarks[10])
+{
+    gint16 *user_metadata = (gint16*)g_malloc0(USER_ARRAY_SIZE);
+
+    for(int i = 0; i < USER_ARRAY_SIZE; i++) {
+        user_metadata[i] = landmarks[i];
+    }
+    return (void *)user_metadata;
+}
+
+static gpointer copy_user_meta(gpointer data, gpointer user_data)
+{
+    NvDsUserMeta *user_meta = (NvDsUserMeta *)data;
+    gint16 *src_user_metadata = (gint16 *)user_meta->user_meta_data;
+    gint16 *dst_user_metadata = (gint16 *)g_malloc0(USER_ARRAY_SIZE);
+    memcpy(dst_user_metadata, src_user_metadata, USER_ARRAY_SIZE);
+    return (gpointer)dst_user_metadata;
+}
+
+static void release_user_meta(gpointer data, gpointer user_data)
+{
+    NvDsUserMeta *user_meta = (NvDsUserMeta *) data;
+    if(user_meta->user_meta_data) {
+        g_free(user_meta->user_meta_data);
+        user_meta->user_meta_data = NULL;
+    }
+}
 
 
 extern "C"
@@ -32,9 +62,7 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
     }
 
     rf.detect(results, 0.5, faceInfo, PGIE_NET_WIDTH);
-    printf("size %zu\n", faceInfo.size());
     for (auto &i : faceInfo){
-        printf("%f\n",i.score);
         NvDsInferObjectDetectionInfo object;
         object.left = i.rect.x1;
         object.top = i.rect.y1;
@@ -50,9 +78,6 @@ bool NvDsInferParseRetinaNet (std::vector<NvDsInferLayerInfo> const &outputLayer
         object.landmarks[5] = i.pts.y[2];
         object.landmarks[7] = i.pts.y[3];
         object.landmarks[9] = i.pts.y[4];
-
-        printf("Landmark: %f\n", object.landmarks[5]);
-
         objectList.push_back(object);
     }
     return true;
@@ -63,15 +88,15 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     static guint use_device_mem = 0;
     static NvDsInferNetworkInfo networkInfo {PGIE_NET_WIDTH, PGIE_NET_HEIGHT, 3};
     NvDsInferParseDetectionParams detectionParams;
-    NvDsBatchMeta *nvDsBatchMeta = gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
-    for (NvDsMetaList *l_frame = nvDsBatchMeta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
-        NvDsFrameMeta *nvDsFrameMeta = (NvDsFrameMeta *) l_frame->data;
-        for (NvDsMetaList *l_user = nvDsFrameMeta->frame_user_meta_list; l_user != NULL; l_user = l_user->next) {
-            NvDsUserMeta *nvDsUserMeta = (NvDsUserMeta *) l_user->data;
-            if (nvDsUserMeta->base_meta.meta_type != NVDSINFER_TENSOR_OUTPUT_META){
+    NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
+    for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
+        NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
+        for (NvDsMetaList *l_user = frame_meta->frame_user_meta_list; l_user != NULL; l_user = l_user->next) {
+            NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
+            if (user_meta->base_meta.meta_type != NVDSINFER_TENSOR_OUTPUT_META){
                 continue;
             }
-            NvDsInferTensorMeta *nvDSInferTensorMeta = (NvDsInferTensorMeta *) nvDsUserMeta->user_meta_data;
+            NvDsInferTensorMeta *nvDSInferTensorMeta = (NvDsInferTensorMeta *) user_meta->user_meta_data;
             for (unsigned int i = 0; i < nvDSInferTensorMeta->num_output_layers; i++) {
                 NvDsInferLayerInfo *info = &nvDSInferTensorMeta->output_layers_info[i];
                 info->buffer = nvDSInferTensorMeta->out_buf_ptrs_host[i];
@@ -83,8 +108,9 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
             std::vector<NvDsInferObjectDetectionInfo> objectList;
             NvDsInferParseRetinaNet(outputLayersInfo, networkInfo, detectionParams, objectList);
 
+
             for (const auto &object:objectList) {
-                NvDsObjectMeta *obj_meta = nvds_acquire_obj_meta_from_pool(nvDsBatchMeta);
+                NvDsObjectMeta *obj_meta = nvds_acquire_obj_meta_from_pool(batch_meta);
                 obj_meta->unique_component_id = nvDSInferTensorMeta->unique_id;
                 obj_meta->confidence = 0.0;
 
@@ -92,7 +118,21 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
 
                 NvOSD_RectParams &rect_params = obj_meta->rect_params;
                 NvOSD_TextParams &text_params = obj_meta->text_params;
-                printf("Landmark: %f\n", object.landmarks[5]);
+                //////////////////////////////////////////////////////
+                NvDsUserMeta *user_meta_landmarks = NULL;
+                NvDsMetaType user_meta_type = NVDS_USER_FRAME_META_EXAMPLE;
+                user_meta_landmarks = nvds_acquire_user_meta_from_pool(batch_meta);
+                int landmarks[10];
+                for(int i = 0; i < USER_ARRAY_SIZE; i++) {
+                    landmarks[i] = (int)object.landmarks[i];
+                    printf("real landmark:%f\n", object.landmarks[i]);
+                }
+                user_meta_landmarks->user_meta_data = (void *)set_metadata_ptr(landmarks);
+                user_meta_landmarks->base_meta.meta_type = user_meta_type;
+                user_meta_landmarks->base_meta.copy_func = (NvDsMetaCopyFunc)copy_user_meta;
+                user_meta_landmarks->base_meta.release_func = (NvDsMetaReleaseFunc)release_user_meta;
+                nvds_add_user_meta_to_frame(frame_meta, user_meta_landmarks);
+                //////////////////////////////////////////////////////
                 /* Assign bounding box coordinates. */
                 rect_params.left = object.left * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
                 rect_params.top = object.top * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
@@ -117,7 +157,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                 text_params.font_params.font_size = 11;
                 text_params.font_params.font_color = (NvOSD_ColorParams) {
                         1, 1, 1, 1};
-                nvds_add_obj_meta_to_frame(nvDsFrameMeta, obj_meta, NULL);
+                nvds_add_obj_meta_to_frame(frame_meta, obj_meta, NULL);
             }
         }
     }
@@ -134,25 +174,40 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     static guint use_device_mem = 0;
     printf("--------------------------------------------\n");
     NvDsBatchMeta *batch_meta =gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
+    NvDsUserMeta *user_meta = NULL;
+    gint16 *user_meta_data = NULL;
+
     /* Iterate each frame metadata in batch */
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
-        /* Iterate object metadata in frame */
+        for (NvDsMetaList *l_user_meta = frame_meta->frame_user_meta_list; l_user_meta != NULL; l_user_meta = l_user_meta->next) {
+            user_meta = (NvDsUserMeta *) (l_user_meta->data);
+            user_meta_data = (gint16 *)user_meta->user_meta_data;
+
+            if(user_meta->base_meta.meta_type == NVDS_USER_FRAME_META_EXAMPLE)
+            {
+                for(int i = 0; i < USER_ARRAY_SIZE; i++) {
+                    g_print("user_meta_data [%d] = %d\n", i, (int)user_meta_data[i]);
+                }
+                g_print("\n");
+            }
+        }
+            /* Iterate object metadata in frame */
         for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *) l_obj->data;
             /* Iterate user metadata in object to search SGIE's tensor data */
             for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
                 NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
-                if (user_meta->base_meta.meta_type != NVDSINFER_TENSOR_OUTPUT_META)
-                    continue;
-                NvDsInferTensorMeta *meta = (NvDsInferTensorMeta *) user_meta->user_meta_data;
-                for (unsigned int i = 0; i < meta->num_output_layers; i++) {
-                    NvDsInferLayerInfo *info = &meta->output_layers_info[i];
-                    info->buffer = meta->out_buf_ptrs_host[i];
-                    if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
-                        cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements, cudaMemcpyDeviceToHost);
-                        std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
-                        print(outputi);
+                if (user_meta->base_meta.meta_type == NVDSINFER_TENSOR_OUTPUT_META){
+                    NvDsInferTensorMeta *meta = (NvDsInferTensorMeta *) user_meta->user_meta_data;
+                    for (unsigned int i = 0; i < meta->num_output_layers; i++) {
+                        NvDsInferLayerInfo *info = &meta->output_layers_info[i];
+                        info->buffer = meta->out_buf_ptrs_host[i];
+                        if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
+                            cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements, cudaMemcpyDeviceToHost);
+                            std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
+                            print(outputi);
+                        }
                     }
                 }
             }
