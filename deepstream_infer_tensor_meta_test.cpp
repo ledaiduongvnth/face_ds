@@ -10,7 +10,7 @@
 #include "postProcessRetina.h"
 
 #define MUXER_OUTPUT_WIDTH 1280
-#define MUXER_OUTPUT_HEIGHT 1280
+#define MUXER_OUTPUT_HEIGHT 720
 #define PGIE_NET_WIDTH 640
 #define PGIE_NET_HEIGHT 640
 #define MUXER_BATCH_TIMEOUT_USEC 40000
@@ -135,9 +135,9 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                 //////////////////////////////////////////////////////
                 /* Assign bounding box coordinates. */
                 rect_params.left = object.left * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
-                rect_params.top = object.top * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
+                rect_params.top = object.top * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
                 rect_params.width = object.width * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
-                rect_params.height = object.height * MUXER_OUTPUT_HEIGHT / PGIE_NET_HEIGHT;
+                rect_params.height = object.height * MUXER_OUTPUT_WIDTH / PGIE_NET_WIDTH;
 
                 /* Border of width 3. */
                 rect_params.border_width = 3;
