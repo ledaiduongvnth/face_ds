@@ -182,10 +182,9 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
         for (NvDsMetaList *l_user_meta = frame_meta->frame_user_meta_list; l_user_meta != NULL; l_user_meta = l_user_meta->next) {
             user_meta = (NvDsUserMeta *) (l_user_meta->data);
-            user_meta_data = (gint16 *)user_meta->user_meta_data;
-
             if(user_meta->base_meta.meta_type == NVDS_USER_FRAME_META_EXAMPLE)
             {
+                user_meta_data = (gint16 *)user_meta->user_meta_data;
                 for(int i = 0; i < USER_ARRAY_SIZE; i++) {
                     g_print("user_meta_data [%d] = %d\n", i, (int)user_meta_data[i]);
                 }
