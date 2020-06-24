@@ -11,5 +11,5 @@ gie-unique-id=2
 operate-on-gie-id=1
 network-type=100
 output-tensor-meta=1
-maintain-aspect-ratio=1
+#maintain-aspect-ratio=1
 
