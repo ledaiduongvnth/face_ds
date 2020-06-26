@@ -349,13 +349,13 @@ int main(int argc, char *argv[]){
     queue3 = gst_element_factory_make("queue", NULL);
     queue4 = gst_element_factory_make("queue", NULL);
     queue5 = gst_element_factory_make("queue", NULL);
+    nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
+    g_object_set (G_OBJECT (nvvidconv), "nvbuf-memory-type", 3, NULL);
 
     dsexample = gst_element_factory_make ("dsexample", "example-plugin");
     g_object_set(G_OBJECT (dsexample), "full-frame", FALSE, "blur-objects", TRUE, NULL);
-
     sgie1 = gst_element_factory_make("nvinfer", "secondary1-nvinference-engine");
     g_object_set(G_OBJECT (sgie1), "config-file-path", "../models/sgie.txt","output-tensor-meta", TRUE, "process-mode", 2, NULL);
-    nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
     nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
     sink = gst_element_factory_make("nveglglessink", "nvvideo-renderer");
     tiler = gst_element_factory_make("nvmultistreamtiler", "tiler");
@@ -399,7 +399,7 @@ int main(int argc, char *argv[]){
         gst_object_unref (sinkpad);
     }
 
-    gst_element_link_many(streammux, pgie, queue, dsexample, queue5, sgie1, queue4, tiler, queue2, nvvidconv, queue3,nvosd,sink, NULL);
+    gst_element_link_many(streammux, pgie, queue, nvvidconv, queue3, dsexample, queue5, sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
