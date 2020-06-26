@@ -15,17 +15,19 @@
 #define PGIE_NET_HEIGHT 640
 #define MUXER_BATCH_TIMEOUT_USEC 40000
 #define NVDS_USER_FRAME_META_EXAMPLE (nvds_get_user_meta_type("NVIDIA.NVINFER.USER_META"))
-#define USER_ARRAY_SIZE 10
+#define USER_ARRAY_SIZE 14
+#define USER_ARRAY_SIZE_CAP 30
+
 #define GST_CAPS_FEATURES_NVMM "memory:NVMM"
 
 
 
-void *set_metadata_ptr(int landmarks[10])
+void *set_metadata_ptr(int faceInfo[USER_ARRAY_SIZE])
 {
-    gint16 *user_metadata = (gint16*)g_malloc0(USER_ARRAY_SIZE);
+    gint16 *user_metadata = (gint16*)g_malloc0(USER_ARRAY_SIZE_CAP);
 
     for(int i = 0; i < USER_ARRAY_SIZE; i++) {
-        user_metadata[i] = landmarks[i];
+        user_metadata[i] = faceInfo[i];
     }
     return (void *)user_metadata;
 }
@@ -34,8 +36,8 @@ static gpointer copy_user_meta(gpointer data, gpointer user_data)
 {
     NvDsUserMeta *user_meta = (NvDsUserMeta *)data;
     gint16 *src_user_metadata = (gint16 *)user_meta->user_meta_data;
-    gint16 *dst_user_metadata = (gint16 *)g_malloc0(USER_ARRAY_SIZE);
-    memcpy(dst_user_metadata, src_user_metadata, USER_ARRAY_SIZE);
+    gint16 *dst_user_metadata = (gint16 *)g_malloc0(USER_ARRAY_SIZE_CAP);
+    memcpy(dst_user_metadata, src_user_metadata, USER_ARRAY_SIZE_CAP);
     return (gpointer)dst_user_metadata;
 }
 
@@ -122,18 +124,23 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                 NvOSD_RectParams &rect_params = obj_meta->rect_params;
                 NvOSD_TextParams &text_params = obj_meta->text_params;
                 //////////////////////////////////////////////////////
-                NvDsUserMeta *user_meta_landmarks = NULL;
+                NvDsUserMeta *user_meta_faceInfo = NULL;
                 NvDsMetaType user_meta_type = NVDS_USER_FRAME_META_EXAMPLE;
-                user_meta_landmarks = nvds_acquire_user_meta_from_pool(batch_meta);
-                int landmarks[10];
-                for(int i = 0; i < USER_ARRAY_SIZE; i++) {
-                    landmarks[i] = (int)object.landmarks[i];
+                user_meta_faceInfo = nvds_acquire_user_meta_from_pool(batch_meta);
+                int faceInfo[USER_ARRAY_SIZE];
+                for(int i = 0; i < 10; i++) {
+                    faceInfo[i] = (int)object.landmarks[i];
                 }
-                user_meta_landmarks->user_meta_data = (void *)set_metadata_ptr(landmarks);
-                user_meta_landmarks->base_meta.meta_type = user_meta_type;
-                user_meta_landmarks->base_meta.copy_func = (NvDsMetaCopyFunc)copy_user_meta;
-                user_meta_landmarks->base_meta.release_func = (NvDsMetaReleaseFunc)release_user_meta;
-                nvds_add_user_meta_to_frame(frame_meta, user_meta_landmarks);
+                faceInfo[10] = (int)object.left;
+                faceInfo[11] = (int)object.top;
+                faceInfo[12] = (int)object.left + (int)object.width;
+                faceInfo[13] = (int)object.top + (int)object.height;
+
+                user_meta_faceInfo->user_meta_data = (void *)set_metadata_ptr(faceInfo);
+                user_meta_faceInfo->base_meta.meta_type = user_meta_type;
+                user_meta_faceInfo->base_meta.copy_func = (NvDsMetaCopyFunc)copy_user_meta;
+                user_meta_faceInfo->base_meta.release_func = (NvDsMetaReleaseFunc)release_user_meta;
+                nvds_add_user_meta_to_frame(frame_meta, user_meta_faceInfo);
                 //////////////////////////////////////////////////////
                 /* Assign bounding box coordinates. */
                 rect_params.left = object.left;
@@ -335,7 +342,7 @@ int main(int argc, char *argv[]){
 
     guint i = 0;
 //    gchar *file = "rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101";
-    gchar *file = "file:///home/d/Downloads/test.mp4";
+    gchar *file = "file:///home/d/Downloads/videoplayback.mp4";
     guint num_sources = 1;
     gst_init(&argc, &argv);
     loop = g_main_loop_new(NULL, FALSE);
