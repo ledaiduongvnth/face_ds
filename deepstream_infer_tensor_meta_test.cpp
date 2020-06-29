@@ -112,18 +112,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
             std::vector<NvDsInferLayerInfo> outputLayersInfo(nvDSInferTensorMeta->output_layers_info,nvDSInferTensorMeta->output_layers_info + nvDSInferTensorMeta->num_output_layers);
             std::vector<NvDsInferObjectDetectionInfo> objectList;
             NvDsInferParseRetinaNet(outputLayersInfo, networkInfo, detectionParams, objectList);
-
-
             for (const auto &object:objectList) {
-                NvDsObjectMeta *obj_meta = nvds_acquire_obj_meta_from_pool(batch_meta);
-                obj_meta->unique_component_id = nvDSInferTensorMeta->unique_id;
-                obj_meta->confidence = 0.0;
-
-                obj_meta->object_id = UNTRACKED_OBJECT_ID;
-
-                NvOSD_RectParams &rect_params = obj_meta->rect_params;
-                NvOSD_TextParams &text_params = obj_meta->text_params;
-                //////////////////////////////////////////////////////
                 NvDsUserMeta *user_meta_faceInfo = NULL;
                 NvDsMetaType user_meta_type = NVDS_USER_FRAME_META_EXAMPLE;
                 user_meta_faceInfo = nvds_acquire_user_meta_from_pool(batch_meta);
@@ -141,32 +130,6 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                 user_meta_faceInfo->base_meta.copy_func = (NvDsMetaCopyFunc)copy_user_meta;
                 user_meta_faceInfo->base_meta.release_func = (NvDsMetaReleaseFunc)release_user_meta;
                 nvds_add_user_meta_to_frame(frame_meta, user_meta_faceInfo);
-                //////////////////////////////////////////////////////
-                /* Assign bounding box coordinates. */
-                rect_params.left = object.left;
-                rect_params.top = object.top;
-                rect_params.width = object.width;
-                rect_params.height = object.height;
-
-                /* Border of width 3. */
-                rect_params.border_width = 3;
-                rect_params.has_bg_color = 0;
-                rect_params.border_color = (NvOSD_ColorParams) {1, 0, 0, 1};
-
-                /* display_text requires heap allocated memory. */
-                /* Display text above the left top corner of the object. */
-                text_params.x_offset = rect_params.left;
-                text_params.y_offset = rect_params.top - 10;
-                /* Set black background for the text. */
-                text_params.set_bg_clr = 1;
-                text_params.text_bg_clr = (NvOSD_ColorParams) {
-                        0, 0, 0, 1};
-                /* Font face, size and color. */
-                text_params.font_params.font_name = (gchar *) "Serif";
-                text_params.font_params.font_size = 11;
-                text_params.font_params.font_color = (NvOSD_ColorParams) {
-                        1, 1, 1, 1};
-                nvds_add_obj_meta_to_frame(frame_meta, obj_meta, NULL);
             }
         }
     }
