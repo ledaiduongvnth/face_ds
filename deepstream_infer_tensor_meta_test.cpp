@@ -304,8 +304,8 @@ int main(int argc, char *argv[]){
     GstPad *tiler_sink_pad = NULL;
 
     guint i = 0;
-//    gchar *file = "rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101";
-    gchar *file = "file:///home/d/Downloads/videoplayback.mp4";
+    gchar *file = "rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101";
+//    gchar *file = "file:///home/d/Downloads/videoplayback.mp4";
     guint num_sources = 1;
     gst_init(&argc, &argv);
     loop = g_main_loop_new(NULL, FALSE);
