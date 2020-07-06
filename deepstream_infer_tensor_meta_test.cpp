@@ -122,14 +122,48 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                 }
                 faceInfo[10] = (int)object.left;
                 faceInfo[11] = (int)object.top;
-                faceInfo[12] = (int)object.left + (int)object.width;
-                faceInfo[13] = (int)object.top + (int)object.height;
+                faceInfo[12] = (int)object.width;
+                faceInfo[13] = (int)object.height;
 
                 user_meta_faceInfo->user_meta_data = (void *)set_metadata_ptr(faceInfo);
                 user_meta_faceInfo->base_meta.meta_type = user_meta_type;
                 user_meta_faceInfo->base_meta.copy_func = (NvDsMetaCopyFunc)copy_user_meta;
                 user_meta_faceInfo->base_meta.release_func = (NvDsMetaReleaseFunc)release_user_meta;
                 nvds_add_user_meta_to_frame(frame_meta, user_meta_faceInfo);
+                ////////////////////////////////////////////////////////////////
+                NvDsObjectMeta *obj_meta = nvds_acquire_obj_meta_from_pool(batch_meta);
+                obj_meta->unique_component_id = nvDSInferTensorMeta->unique_id;
+                obj_meta->confidence = 0.0;
+
+                obj_meta->object_id = UNTRACKED_OBJECT_ID;
+
+                NvOSD_RectParams &rect_params = obj_meta->rect_params;
+                NvOSD_TextParams &text_params = obj_meta->text_params;
+                /* Assign bounding box coordinates. */
+                rect_params.left = object.left;
+                rect_params.top = object.top;
+                rect_params.width = object.width;
+                rect_params.height = object.height;
+
+                /* Border of width 3. */
+                rect_params.border_width = 3;
+                rect_params.has_bg_color = 0;
+                rect_params.border_color = (NvOSD_ColorParams) {1, 0, 0, 1};
+
+                /* display_text requires heap allocated memory. */
+                /* Display text above the left top corner of the object. */
+                text_params.x_offset = rect_params.left;
+                text_params.y_offset = rect_params.top - 10;
+                /* Set black background for the text. */
+                text_params.set_bg_clr = 1;
+                text_params.text_bg_clr = (NvOSD_ColorParams) {
+                        0, 0, 0, 1};
+                /* Font face, size and color. */
+                text_params.font_params.font_name = (gchar *) "Serif";
+                text_params.font_params.font_size = 11;
+                text_params.font_params.font_color = (NvOSD_ColorParams) {
+                        1, 1, 1, 1};
+                nvds_add_obj_meta_to_frame(frame_meta, obj_meta, NULL);
             }
         }
     }
@@ -146,34 +180,51 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     static guint use_device_mem = 0;
     printf("--------------------------------------------\n");
     NvDsBatchMeta *batch_meta =gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
-    NvDsUserMeta *user_meta = NULL;
-    gint16 *user_meta_data = NULL;
-
-    /* Iterate each frame metadata in batch */
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
-            /* Iterate object metadata in frame */
-        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
-            NvDsObjectMeta *obj_meta = (NvDsObjectMeta *) l_obj->data;
-            /* Iterate user metadata in object to search SGIE's tensor data */
-            for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
-                NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
-                if (user_meta->base_meta.meta_type == NVDSINFER_TENSOR_OUTPUT_META){
-                    NvDsInferTensorMeta *meta = (NvDsInferTensorMeta *) user_meta->user_meta_data;
-                    for (unsigned int i = 0; i < meta->num_output_layers; i++) {
-                        NvDsInferLayerInfo *info = &meta->output_layers_info[i];
-                        info->buffer = meta->out_buf_ptrs_host[i];
-                        if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
-                            cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements, cudaMemcpyDeviceToHost);
-                            std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
-                            print(outputi);
+        std::vector<std::vector<int>> listBoxes;
+        for (NvDsMetaList *l_user_meta = frame_meta->frame_user_meta_list; l_user_meta != NULL; l_user_meta = l_user_meta->next) {
+            std::vector<int> box;
+            NvDsUserMeta *user_meta = NULL;
+            gint16 *user_meta_data = NULL;
+            user_meta = (NvDsUserMeta *) (l_user_meta->data);
+            if (user_meta->base_meta.meta_type == NVDS_USER_FRAME_META_EXAMPLE) {
+                user_meta_data = (gint16 *) user_meta->user_meta_data;
+                for (int i = 10; i < 14; i++) {
+                    box.emplace_back(user_meta_data[i]);
+                }
+            }
+            listBoxes.emplace_back(box);
+        }
+        if(!listBoxes.empty()){
+            int k = 0;
+            for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
+                NvDsObjectMeta *object_meta = (NvDsObjectMeta *) l_obj->data;
+                NvOSD_RectParams &rect_params = object_meta->rect_params;
+                NvOSD_TextParams &text_params = object_meta->text_params;
+                rect_params.left = listBoxes[k][0];
+                rect_params.top = listBoxes[k][1];
+                rect_params.width = listBoxes[k][2];
+                rect_params.height = listBoxes[k][3];
+                for (NvDsMetaList *l_user = object_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
+                    NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
+                    if (user_meta->base_meta.meta_type == NVDSINFER_TENSOR_OUTPUT_META){
+                        NvDsInferTensorMeta *meta = (NvDsInferTensorMeta *) user_meta->user_meta_data;
+                        for (unsigned int i = 0; i < meta->num_output_layers; i++) {
+                            NvDsInferLayerInfo *info = &meta->output_layers_info[i];
+                            info->buffer = meta->out_buf_ptrs_host[i];
+                            if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
+                                cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements, cudaMemcpyDeviceToHost);
+                                std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
+                                print(outputi);
+                            }
                         }
                     }
                 }
+                k = k + 1;
             }
         }
     }
-
     use_device_mem = 1 - use_device_mem;
     return GST_PAD_PROBE_OK;
 }
@@ -296,16 +347,15 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
 int main(int argc, char *argv[]){
     GMainLoop *loop = NULL;
     GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL, *queue =NULL, *decoder = NULL, *streammux = NULL,
-    *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL,  *tiler =NULL, *queue2, *queue3, *queue4, *queue5,
-    *dsexample, *sgie1;
+    *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL,  *tiler =NULL, *queue2, *queue3, *queue4, *queue5,*queue6,
+    *dsexample, *sgie1, *nvtracker;
     GstBus *bus = NULL;
     guint bus_watch_id = 0;
     GstPad *queue_src_pad = NULL;
     GstPad *tiler_sink_pad = NULL;
 
-    guint i = 0;
-    gchar *file = "rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101";
-//    gchar *file = "file:///home/d/Downloads/videoplayback.mp4";
+//    gchar *file = "rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101";
+    gchar *file = "file:///home/d/Downloads/videoplayback.mp4";
     guint num_sources = 1;
     gst_init(&argc, &argv);
     loop = g_main_loop_new(NULL, FALSE);
@@ -314,11 +364,15 @@ int main(int argc, char *argv[]){
     g_object_set(G_OBJECT (streammux),"enable-padding",TRUE, "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
     g_object_set(G_OBJECT (pgie), "config-file-path", "../models/pgie.txt","output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
+    nvtracker = gst_element_factory_make("nvtracker", "track-object");
+    g_object_set(G_OBJECT (nvtracker),"tracker-width", 50, "tracker-height", 50, "gpu-id", 0,
+            "ll-lib-file", "/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/lib/libnvds_mot_iou.so", NULL);
     queue = gst_element_factory_make("queue", NULL);
     queue2 = gst_element_factory_make("queue", NULL);
     queue3 = gst_element_factory_make("queue", NULL);
     queue4 = gst_element_factory_make("queue", NULL);
     queue5 = gst_element_factory_make("queue", NULL);
+    queue6 = gst_element_factory_make("queue", NULL);
     nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
     g_object_set (G_OBJECT (nvvidconv), "nvbuf-memory-type", 3, NULL);
 
@@ -333,9 +387,9 @@ int main(int argc, char *argv[]){
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
-    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue, dsexample, queue5, sgie1, queue4,tiler, queue2, nvvidconv, queue3, nvosd,sink, NULL);
+    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue,nvtracker, queue6, dsexample, queue5, sgie1, queue4,tiler, queue2, nvvidconv, queue3, nvosd,sink, NULL);
 
-    for (i = 0; i < num_sources; i++){
+    for (int i = 0; i < num_sources; i++){
         GstPad *sinkpad, *srcpad;
         gchar pad_name[16] = { };
         GstElement *source_bin = create_source_bin (i, file);
@@ -369,7 +423,7 @@ int main(int argc, char *argv[]){
         gst_object_unref (sinkpad);
     }
 
-    gst_element_link_many(streammux, pgie, queue, nvvidconv, queue3, dsexample, queue5, sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
+    gst_element_link_many(streammux, pgie, queue, nvtracker, queue6, nvvidconv, queue3, dsexample, queue5, sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
