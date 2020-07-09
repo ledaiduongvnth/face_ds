@@ -19,7 +19,128 @@
 #define USER_ARRAY_SIZE_CAP 30
 
 #define GST_CAPS_FEATURES_NVMM "memory:NVMM"
+#define TRACKER_CONFIG_FILE "/mnt/hdd/CLionProjects/face_ds/dstest2_tracker_config.txt"
+#define CONFIG_GROUP_TRACKER "tracker"
+#define CONFIG_GROUP_TRACKER_WIDTH "tracker-width"
+#define CONFIG_GROUP_TRACKER_HEIGHT "tracker-height"
+#define CONFIG_GROUP_TRACKER_LL_CONFIG_FILE "ll-config-file"
+#define CONFIG_GROUP_TRACKER_LL_LIB_FILE "ll-lib-file"
+#define CONFIG_GROUP_TRACKER_ENABLE_BATCH_PROCESS "enable-batch-process"
+#define CONFIG_GPU_ID "gpu-id"
 
+#define CHECK_ERROR(error) \
+    if (error) { \
+        g_printerr ("Error while parsing config file: %s\n", error->message); \
+        goto done; \
+    }
+static gchar *
+get_absolute_file_path (gchar *cfg_file_path, gchar *file_path)
+{
+    gchar abs_cfg_path[PATH_MAX + 1];
+    gchar *abs_file_path;
+    gchar *delim;
+
+    if (file_path && file_path[0] == '/') {
+        return file_path;
+    }
+
+    if (!realpath (cfg_file_path, abs_cfg_path)) {
+        g_free (file_path);
+        return NULL;
+    }
+
+    // Return absolute path of config file if file_path is NULL.
+    if (!file_path) {
+        abs_file_path = g_strdup (abs_cfg_path);
+        return abs_file_path;
+    }
+
+    delim = g_strrstr (abs_cfg_path, "/");
+    *(delim + 1) = '\0';
+
+    abs_file_path = g_strconcat (abs_cfg_path, file_path, NULL);
+    g_free (file_path);
+
+    return abs_file_path;
+}
+
+static gboolean
+set_tracker_properties (GstElement *nvtracker)
+{
+    gboolean ret = FALSE;
+    GError *error = NULL;
+    gchar **keys = NULL;
+    gchar **key = NULL;
+    GKeyFile *key_file = g_key_file_new ();
+
+    if (!g_key_file_load_from_file (key_file, TRACKER_CONFIG_FILE, G_KEY_FILE_NONE,
+                                    &error)) {
+        g_printerr ("Failed to load config file: %s\n", error->message);
+        return FALSE;
+    }
+
+    keys = g_key_file_get_keys (key_file, CONFIG_GROUP_TRACKER, NULL, &error);
+    CHECK_ERROR (error);
+
+    for (key = keys; *key; key++) {
+        if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_WIDTH)) {
+            gint width =
+                    g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
+                                            CONFIG_GROUP_TRACKER_WIDTH, &error);
+            CHECK_ERROR (error);
+            g_object_set (G_OBJECT (nvtracker), "tracker-width", width, NULL);
+        } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_HEIGHT)) {
+            gint height =
+                    g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
+                                            CONFIG_GROUP_TRACKER_HEIGHT, &error);
+            CHECK_ERROR (error);
+            g_object_set (G_OBJECT (nvtracker), "tracker-height", height, NULL);
+        } else if (!g_strcmp0 (*key, CONFIG_GPU_ID)) {
+            guint gpu_id =
+                    g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
+                                            CONFIG_GPU_ID, &error);
+            CHECK_ERROR (error);
+            g_object_set (G_OBJECT (nvtracker), "gpu_id", gpu_id, NULL);
+        } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_LL_CONFIG_FILE)) {
+            char* ll_config_file = get_absolute_file_path (TRACKER_CONFIG_FILE,
+                                                           g_key_file_get_string (key_file,
+                                                                                  CONFIG_GROUP_TRACKER,
+                                                                                  CONFIG_GROUP_TRACKER_LL_CONFIG_FILE, &error));
+            CHECK_ERROR (error);
+            g_object_set (G_OBJECT (nvtracker), "ll-config-file", ll_config_file, NULL);
+        } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_LL_LIB_FILE)) {
+            char* ll_lib_file = get_absolute_file_path (TRACKER_CONFIG_FILE,
+                                                        g_key_file_get_string (key_file,
+                                                                               CONFIG_GROUP_TRACKER,
+                                                                               CONFIG_GROUP_TRACKER_LL_LIB_FILE, &error));
+            CHECK_ERROR (error);
+            g_object_set (G_OBJECT (nvtracker), "ll-lib-file", ll_lib_file, NULL);
+        } else if (!g_strcmp0 (*key, CONFIG_GROUP_TRACKER_ENABLE_BATCH_PROCESS)) {
+            gboolean enable_batch_process =
+                    g_key_file_get_integer (key_file, CONFIG_GROUP_TRACKER,
+                                            CONFIG_GROUP_TRACKER_ENABLE_BATCH_PROCESS, &error);
+            CHECK_ERROR (error);
+            g_object_set (G_OBJECT (nvtracker), "enable_batch_process",
+                          enable_batch_process, NULL);
+        } else {
+            g_printerr ("Unknown key '%s' for group [%s]", *key,
+                        CONFIG_GROUP_TRACKER);
+        }
+    }
+
+    ret = TRUE;
+    done:
+    if (error) {
+        g_error_free (error);
+    }
+    if (keys) {
+        g_strfreev (keys);
+    }
+    if (!ret) {
+        g_printerr ("%s failed", __func__);
+    }
+    return ret;
+}
 
 
 void *set_metadata_ptr(int faceInfo[USER_ARRAY_SIZE])
@@ -96,6 +217,8 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
+        nvds_acquire_meta_lock (batch_meta);
+        frame_meta->bInferDone = TRUE;
         for (NvDsMetaList *l_user = frame_meta->frame_user_meta_list; l_user != NULL; l_user = l_user->next) {
             NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
             if (user_meta->base_meta.meta_type != NVDSINFER_TENSOR_OUTPUT_META){
@@ -133,7 +256,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                 ////////////////////////////////////////////////////////////////
                 NvDsObjectMeta *obj_meta = nvds_acquire_obj_meta_from_pool(batch_meta);
                 obj_meta->unique_component_id = nvDSInferTensorMeta->unique_id;
-                obj_meta->confidence = 0.0;
+                obj_meta->confidence = 1;
 
                 obj_meta->object_id = UNTRACKED_OBJECT_ID;
 
@@ -166,6 +289,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                 nvds_add_obj_meta_to_frame(frame_meta, obj_meta, NULL);
             }
         }
+        nvds_release_meta_lock (batch_meta);
     }
     use_device_mem = 1 - use_device_mem;
     return GST_PAD_PROBE_OK;
@@ -365,8 +489,11 @@ int main(int argc, char *argv[]){
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
     g_object_set(G_OBJECT (pgie), "config-file-path", "../models/pgie.txt","output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
     nvtracker = gst_element_factory_make("nvtracker", "track-object");
-    g_object_set(G_OBJECT (nvtracker),"tracker-width", 50, "tracker-height", 50, "gpu-id", 0,
-            "ll-lib-file", "/home/d/Downloads/deepstream_sdk_v5.0.0_x86_64/opt/nvidia/deepstream/deepstream-5.0/lib/libnvds_mot_iou.so", NULL);
+    /* Set necessary properties of the tracker element. */
+    if (!set_tracker_properties(nvtracker)) {
+        g_printerr ("Failed to set tracker properties. Exiting.\n");
+        return -1;
+    }
     queue = gst_element_factory_make("queue", NULL);
     queue2 = gst_element_factory_make("queue", NULL);
     queue3 = gst_element_factory_make("queue", NULL);
@@ -423,7 +550,7 @@ int main(int argc, char *argv[]){
         gst_object_unref (sinkpad);
     }
 
-    gst_element_link_many(streammux, pgie, queue, nvtracker, queue6, nvvidconv, queue3, dsexample, queue5, sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
+    gst_element_link_many(streammux, pgie, queue,nvtracker, queue6, nvvidconv, queue3,  dsexample,  queue5, sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
