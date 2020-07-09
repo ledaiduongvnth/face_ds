@@ -12,4 +12,5 @@ operate-on-gie-id=1
 network-type=100
 output-tensor-meta=1
 maintain-aspect-ratio=1
+#classifier-async-mode=1
 
