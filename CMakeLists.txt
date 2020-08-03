@@ -13,15 +13,14 @@ include_directories(
         /opt/nvidia/deepstream/deepstream-5.0/sources/includes
         /usr/include/glib-2.0
         /usr/include/gstreamer-1.0
-
 )
 
 
 add_executable(
         face-ds
         deepstream_infer_tensor_meta_test.cpp
-        postProcessRetina.h
-        postProcessRetina.cpp
+        FaceDetector.h
+        FaceDetector.cpp
 )
 
 
