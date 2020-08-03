@@ -472,7 +472,7 @@ int main(int argc, char *argv[]){
     GstPad *queue_src_pad = NULL;
     GstPad *tiler_sink_pad = NULL;
 
-    gchar *file1[] = {"file:///home/d/Downloads/skyfall.mp4","rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","file:///home/d/Downloads/film.mp4","file:///mnt/hdd/output.h264","file:///home/d/Downloads/F9.mp4","file:///home/d/Downloads/videoplayback.mp4"};
+    gchar *file1[] = {"rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","file:///mnt/hdd/output.h264","file:///home/d/Downloads/F9.mp4","file:///home/d/Downloads/videoplayback.mp4"};
     //gchar *file = "file:///home/d/Downloads/videoplayback.mp4";
     //gchar *file = "file:///home/d/Downloads/skyfall.mp4";
 
@@ -513,7 +513,7 @@ int main(int argc, char *argv[]){
     gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue,nvtracker, queue6, dsexample, queue5, sgie1, queue4,tiler, queue2, nvvidconv, queue3, nvosd,sink, NULL);
 
     for (int i = 0; i < num_sources; i++){
-        if(file1[i] != nullptr) {
+
 
             GstPad *sinkpad, *srcpad;
             gchar pad_name[16] = {};
@@ -546,7 +546,7 @@ int main(int argc, char *argv[]){
 
             gst_object_unref(srcpad);
             gst_object_unref(sinkpad);
-        }
+
     }
     //Devide cluster
     guint pgie_batch_size;
@@ -570,7 +570,7 @@ int main(int argc, char *argv[]){
     g_object_set (G_OBJECT (tiler), "rows", tiler_rows, "columns", tiler_columns,
                   "width", MUXER_OUTPUT_WIDTH, "height", MUXER_OUTPUT_HEIGHT, NULL);
 
-    gst_element_link_many(streammux, pgie, queue,nvtracker, queue6, nvvidconv, queue3,  dsexample,  queue5,   tiler, queue2, nvosd,sink, NULL);
+    gst_element_link_many(streammux, pgie, queue,nvtracker, queue6, nvvidconv, queue3,  dsexample,  queue5,  sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
