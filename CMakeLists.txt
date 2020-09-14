@@ -31,7 +31,8 @@ target_link_libraries(
         nvinfer_plugin
         ${OpenCV_LIBS}
         -L/usr/local/cuda-10.2/lib64/ -lcudart
-        -L/opt/nvidia/deepstream/deepstream-5.0/lib -lnvdsgst_meta -lnvds_meta -lnvds_inferutils -lnvds_utils -lm -lnvds_infercustomparser
+        -L/opt/nvidia/deepstream/deepstream-5.0/lib -Wl,-rpath=/opt/nvidia/deepstream/deepstream-5.0/lib
+        -lnvdsgst_meta -lnvds_meta -lnvds_inferutils -lnvds_utils -lm -lnvds_infercustomparser
         -lgstreamer-1.0
         -lgobject-2.0
         -lglib-2.0

@@ -472,7 +472,7 @@ int main(int argc, char *argv[]){
     GstPad *queue_src_pad = NULL;
     GstPad *tiler_sink_pad = NULL;
 
-    gchar *file1[] = {"rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","rtsp://admin:abcd1234@172.16.10.84/Streaming/Channels/101","file:///mnt/hdd/output.h264","file:///home/d/Downloads/F9.mp4","file:///home/d/Downloads/videoplayback.mp4"};
+    gchar *file1[] = {"file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4"};
     //gchar *file = "file:///home/d/Downloads/videoplayback.mp4";
     //gchar *file = "file:///home/d/Downloads/skyfall.mp4";
 
