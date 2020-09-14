@@ -300,9 +300,6 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     static guint use_device_mem = 0;
     printf("--------------------------------------------\n");
     NvDsBatchMeta *batch_meta =gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
-    NvDsUserMeta *user_meta = NULL;
-    gint16 *user_meta_data = NULL;
-
     /* Iterate each frame metadata in batch */
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
