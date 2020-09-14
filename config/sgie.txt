@@ -1,6 +1,6 @@
 [property]
 gpu-id=0
-#onnx-file=/mnt/hdd/CLionProjects/face_ds/models/model.onnx
+onnx-file=/mnt/hdd/CLionProjects/face_ds/models/model.onnx
 model-engine-file=/mnt/hdd/CLionProjects/face_ds/models/model.onnx_b4_gpu0_fp16.engine
 batch-size=4
 network-mode=2
