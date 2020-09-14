@@ -300,51 +300,34 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     static guint use_device_mem = 0;
     printf("--------------------------------------------\n");
     NvDsBatchMeta *batch_meta =gst_buffer_get_nvds_batch_meta(GST_BUFFER (info->data));
+    NvDsUserMeta *user_meta = NULL;
+    gint16 *user_meta_data = NULL;
+
+    /* Iterate each frame metadata in batch */
     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *) l_frame->data;
-        std::vector<std::vector<int>> listBoxes;
-        for (NvDsMetaList *l_user_meta = frame_meta->frame_user_meta_list; l_user_meta != NULL; l_user_meta = l_user_meta->next) {
-            std::vector<int> box;
-            NvDsUserMeta *user_meta = NULL;
-            gint16 *user_meta_data = NULL;
-            user_meta = (NvDsUserMeta *) (l_user_meta->data);
-            if (user_meta->base_meta.meta_type == NVDS_USER_FRAME_META_EXAMPLE) {
-                user_meta_data = (gint16 *) user_meta->user_meta_data;
-                for (int i = 10; i < 14; i++) {
-                    box.emplace_back(user_meta_data[i]);
-                }
-            }
-            listBoxes.emplace_back(box);
-        }
-        if(!listBoxes.empty()){
-            int k = 0;
-            for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
-                NvDsObjectMeta *object_meta = (NvDsObjectMeta *) l_obj->data;
-                NvOSD_RectParams &rect_params = object_meta->rect_params;
-                NvOSD_TextParams &text_params = object_meta->text_params;
-                rect_params.left = listBoxes[k][0];
-                rect_params.top = listBoxes[k][1];
-                rect_params.width = listBoxes[k][2];
-                rect_params.height = listBoxes[k][3];
-                for (NvDsMetaList *l_user = object_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
-                    NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
-                    if (user_meta->base_meta.meta_type == NVDSINFER_TENSOR_OUTPUT_META){
-                        NvDsInferTensorMeta *meta = (NvDsInferTensorMeta *) user_meta->user_meta_data;
-                        for (unsigned int i = 0; i < meta->num_output_layers; i++) {
-                            NvDsInferLayerInfo *info = &meta->output_layers_info[i];
-                            info->buffer = meta->out_buf_ptrs_host[i];
-                            if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
-                                cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements, cudaMemcpyDeviceToHost);
-                                std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
-                                print(outputi);
-                            }
+        /* Iterate object metadata in frame */
+        for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
+            NvDsObjectMeta *obj_meta = (NvDsObjectMeta *) l_obj->data;
+            /* Iterate user metadata in object to search SGIE's tensor data */
+            for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
+                NvDsUserMeta *user_meta = (NvDsUserMeta *) l_user->data;
+                if (user_meta->base_meta.meta_type == NVDSINFER_TENSOR_OUTPUT_META){
+                    NvDsInferTensorMeta *meta = (NvDsInferTensorMeta *) user_meta->user_meta_data;
+                    for (unsigned int i = 0; i < meta->num_output_layers; i++) {
+                        NvDsInferLayerInfo *info = &meta->output_layers_info[i];
+                        info->buffer = meta->out_buf_ptrs_host[i];
+                        if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
+                            cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements, cudaMemcpyDeviceToHost);
+                            std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
+                            print(outputi);
                         }
                     }
                 }
-                k = k + 1;
             }
         }
     }
+
     use_device_mem = 1 - use_device_mem;
     return GST_PAD_PROBE_OK;
 }
@@ -464,19 +447,22 @@ static gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
 
 int main(int argc, char *argv[]){
     GMainLoop *loop = NULL;
-    GstElement *pipeline = NULL, *source = NULL, *h264parser = NULL, *queue =NULL, *decoder = NULL, *streammux = NULL,
-            *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL,  *tiler =NULL, *queue2, *queue3, *queue4, *queue5,*queue6,
-            *dsexample, *sgie1, *nvtracker;
+    GstElement *pipeline = NULL, *queue =NULL, *streammux = NULL, *sink = NULL, *pgie =NULL, *nvvidconv = NULL, *nvosd = NULL,
+    *tiler =NULL, *queue2, *queue3, *queue4,*queue6, *sgie1, *nvtracker;
     GstBus *bus = NULL;
     guint bus_watch_id = 0;
     GstPad *queue_src_pad = NULL;
     GstPad *tiler_sink_pad = NULL;
 
-    gchar *file1[] = {"file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4","file:///home/d/Downloads/videoplayback.mp4"};
-    //gchar *file = "file:///home/d/Downloads/videoplayback.mp4";
-    //gchar *file = "file:///home/d/Downloads/skyfall.mp4";
+    gchar *file1[] = {"file:///home/d/Downloads/videoplayback.mp4",
+                      "file:///home/d/Downloads/videoplayback.mp4",
+                      "file:///home/d/Downloads/videoplayback.mp4",
+                      "file:///home/d/Downloads/videoplayback.mp4",
+                      "file:///home/d/Downloads/videoplayback.mp4",
+                      "file:///home/d/Downloads/videoplayback.mp4",
+                      "file:///home/d/Downloads/videoplayback.mp4"};
 
-    guint num_sources = 4;
+    guint num_sources = 1;
     gst_init(&argc, &argv);
     loop = g_main_loop_new(NULL, FALSE);
     pipeline = gst_pipeline_new("dstensor-pipeline");
@@ -494,13 +480,10 @@ int main(int argc, char *argv[]){
     queue2 = gst_element_factory_make("queue", NULL);
     queue3 = gst_element_factory_make("queue", NULL);
     queue4 = gst_element_factory_make("queue", NULL);
-    queue5 = gst_element_factory_make("queue", NULL);
     queue6 = gst_element_factory_make("queue", NULL);
     nvvidconv = gst_element_factory_make("nvvideoconvert", "nvvideo-converter");
     g_object_set (G_OBJECT (nvvidconv), "nvbuf-memory-type", 3, NULL);
 
-    dsexample = gst_element_factory_make ("dsexample", "example-plugin");
-    g_object_set(G_OBJECT (dsexample), "full-frame", FALSE, "blur-objects", TRUE, NULL);
     sgie1 = gst_element_factory_make("nvinfer", "secondary1-nvinference-engine");
     g_object_set(G_OBJECT (sgie1), "config-file-path", "../config/sgie.txt","output-tensor-meta", TRUE, "process-mode", 2, NULL);
     nvosd = gst_element_factory_make("nvdsosd", "nv-onscreendisplay");
@@ -510,11 +493,9 @@ int main(int argc, char *argv[]){
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
-    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue,nvtracker, queue6, dsexample, queue5, sgie1, queue4,tiler, queue2, nvvidconv, queue3, nvosd,sink, NULL);
+    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue,nvtracker, queue6, sgie1, queue4,tiler, queue2, nvvidconv, queue3, nvosd,sink, NULL);
 
     for (int i = 0; i < num_sources; i++){
-
-
             GstPad *sinkpad, *srcpad;
             gchar pad_name[16] = {};
             GstElement *source_bin = create_source_bin(i, file1[i]);
@@ -548,7 +529,7 @@ int main(int argc, char *argv[]){
             gst_object_unref(sinkpad);
 
     }
-    //Devide cluster
+    ///////////////////////////////////////////////////For displaying into a grid///////////////////////////////////////
     guint pgie_batch_size;
     guint tiler_rows, tiler_columns;
     g_object_set (G_OBJECT (streammux), "batch-size", num_sources, NULL);
@@ -569,16 +550,18 @@ int main(int argc, char *argv[]){
     /* we set the tiler properties here */
     g_object_set (G_OBJECT (tiler), "rows", tiler_rows, "columns", tiler_columns,
                   "width", MUXER_OUTPUT_WIDTH, "height", MUXER_OUTPUT_HEIGHT, NULL);
-
-    gst_element_link_many(streammux, pgie, queue,nvtracker, queue6, nvvidconv, queue3,  dsexample,  queue5,  sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    gst_element_link_many(streammux, pgie, queue,nvtracker, queue6, nvvidconv, queue3, sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
+    ///////////////////////////////////// post process the output from pgie ////////////////////////////////////////////
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////// get output from sgie /////////////////////////////////////////////////////////
     tiler_sink_pad = gst_element_get_static_pad(tiler, "sink");
     gst_pad_add_probe(tiler_sink_pad, GST_PAD_PROBE_TYPE_BUFFER, sgie_pad_buffer_probe, NULL, NULL);
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
-
     g_main_loop_run(loop);
-
     gst_element_set_state(pipeline, GST_STATE_NULL);
     gst_object_unref(GST_OBJECT (pipeline));
     g_source_remove(bus_watch_id);
