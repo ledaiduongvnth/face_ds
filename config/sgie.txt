@@ -1,11 +1,11 @@
 [property]
 gpu-id=0
 #onnx-file=/mnt/hdd/CLionProjects/face_ds/models/model.onnx
-model-engine-file=/mnt/hdd/CLionProjects/face_ds/models/model.onnx_b1_gpu0_fp16.engine
+model-engine-file=/mnt/hdd/CLionProjects/face_ds/models/model.onnx_b4_gpu0_fp16.engine
 batch-size=1
 network-mode=2
-input-object-min-width=112
-input-object-min-height=112
+input-object-min-width=50
+input-object-min-height=50
 process-mode=2
 gie-unique-id=2
 operate-on-gie-id=1
@@ -13,4 +13,3 @@ network-type=100
 output-tensor-meta=1
 maintain-aspect-ratio=1
 classifier-async-mode=1
-
