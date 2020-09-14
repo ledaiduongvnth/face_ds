@@ -19,7 +19,7 @@
 #define USER_ARRAY_SIZE_CAP 30
 
 #define GST_CAPS_FEATURES_NVMM "memory:NVMM"
-#define TRACKER_CONFIG_FILE "/mnt/hdd/CLionProjects/face_ds/dstest2_tracker_config.txt"
+#define TRACKER_CONFIG_FILE "../dstest2_tracker_config.txt"
 #define CONFIG_GROUP_TRACKER "tracker"
 #define CONFIG_GROUP_TRACKER_WIDTH "tracker-width"
 #define CONFIG_GROUP_TRACKER_HEIGHT "tracker-height"

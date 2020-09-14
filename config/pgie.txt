@@ -1,10 +1,10 @@
 [property]
 gpu-id=0
 
-#model-file=/mnt/hdd/CLionProjects/face_ds/models/mnet.caffemodel
-#proto-file=/mnt/hdd/CLionProjects/face_ds/models/mnet.prototxt.txt
-model-engine-file=/mnt/hdd/CLionProjects/face_ds/models/faceDetector_RBF_480640.onnx_b4_gpu0_fp16.engine
-onnx-file=/mnt/hdd/CLionProjects/face_ds/models/faceDetector_RBF_480640.onnx
+#model-file=../models/mnet.caffemodel
+#proto-file=../models/mnet.prototxt.txt
+model-engine-file=../models/faceDetector_RBF_480640.onnx_b4_gpu0_fp16.engine
+onnx-file=../models/faceDetector_RBF_480640.onnx
 batch-size=4
 gie-unique-id=1
 network-mode=2
