@@ -18,7 +18,7 @@ include_directories(
 
 add_executable(
         face-ds
-        deepstream_infer_tensor_meta_test.cpp
+        main.cpp
         FaceDetector.h
         FaceDetector.cpp
 )
