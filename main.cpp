@@ -457,6 +457,7 @@ int main(int argc, char *argv[]){
                       "file:///home/d/Downloads/videoplayback.mp4",
                       "file:///home/d/Downloads/videoplayback.mp4",
                       "file:///home/d/Downloads/videoplayback.mp4",
+                      "file:///home/d/Downloads/videoplayback.mp4",
                       "file:///home/d/Downloads/videoplayback.mp4"};
 
     guint num_sources = 1;
@@ -466,7 +467,7 @@ int main(int argc, char *argv[]){
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
     g_object_set(G_OBJECT (streammux),"enable-padding",TRUE, "width", MUXER_OUTPUT_WIDTH, "height",MUXER_OUTPUT_HEIGHT, "batch-size", num_sources,"batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
-    g_object_set(G_OBJECT (pgie), "config-file-path", "../config/pgie.txt","output-tensor-meta", TRUE, "batch-size", num_sources, NULL);
+    g_object_set(G_OBJECT (pgie), "config-file-path", "../config/pgie.txt","output-tensor-meta", TRUE, NULL);
     nvtracker = gst_element_factory_make("nvtracker", "track-object");
     /* Set necessary properties of the tracker element. */
     if (!set_tracker_properties(nvtracker)) {
@@ -534,14 +535,6 @@ int main(int argc, char *argv[]){
     g_object_set (G_OBJECT (streammux), "width", MUXER_OUTPUT_WIDTH, "height",
                   MUXER_OUTPUT_HEIGHT,
                   "batched-push-timeout", MUXER_BATCH_TIMEOUT_USEC, NULL);
-    /* Override the batch-size set in the config file with the number of sources. */
-    g_object_get (G_OBJECT (pgie), "batch-size", &pgie_batch_size, NULL);
-    if (pgie_batch_size != num_sources) {
-        g_printerr
-                ("WARNING: Overriding infer-config batch-size (%d) with number of sources (%d)\n",
-                 pgie_batch_size, num_sources);
-        g_object_set (G_OBJECT (pgie), "batch-size", num_sources, NULL);
-    }
     tiler_rows = (guint) sqrt (num_sources);
     tiler_columns = (guint) ceil (1.0 * num_sources / tiler_rows);
     /* we set the tiler properties here */
