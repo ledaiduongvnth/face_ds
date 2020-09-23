@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <nvdsmeta_schema.h>
 #include "cuda_runtime_api.h"
 #include "gstnvdsmeta.h"
 #include "gstnvdsinfer.h"
@@ -17,6 +18,7 @@
 #define NVDS_USER_FRAME_META_EXAMPLE (nvds_get_user_meta_type("NVIDIA.NVINFER.USER_META"))
 #define USER_ARRAY_SIZE 14
 #define USER_ARRAY_SIZE_CAP 30
+#define MSCONV_CONFIG_FILE "/home/d/CLionProjects/demo_kafka/config/dstest4_msgconv_config.txt"
 
 #define GST_CAPS_FEATURES_NVMM "memory:NVMM"
 #define TRACKER_CONFIG_FILE "../dstest2_tracker_config.txt"
@@ -27,12 +29,185 @@
 #define CONFIG_GROUP_TRACKER_LL_LIB_FILE "ll-lib-file"
 #define CONFIG_GROUP_TRACKER_ENABLE_BATCH_PROCESS "enable-batch-process"
 #define CONFIG_GPU_ID "gpu-id"
+#define MAX_TIME_STAMP_LEN 32
 
 #define CHECK_ERROR(error) \
     if (error) { \
         g_printerr ("Error while parsing config file: %s\n", error->message); \
         goto done; \
     }
+//add kafka
+
+static gchar *cfg_file = NULL;
+//static gchar *input_file = "/home/d/CLionProjects/demo_kafka/sample_720p.h264";
+static gchar *input_file = "/home/d/CLionProjects/demo_kafka/sample_720p.h264";
+
+static gchar *topic = "test123";
+static gchar *conn_str = "172.16.10.30;9092;test123";
+static gchar *proto_lib = "/home/d/CLionProjects/demo_kafka/libnvds_kafka_proto.so";
+static gint schema_type = 0;
+static gboolean display_off = FALSE;
+
+
+GOptionEntry entries[] = {
+        {"cfg-file", 'c', 0, G_OPTION_ARG_FILENAME, &cfg_file,
+                                                              "Set the adaptor config file. Optional if connection string has relevant  details.", NULL},
+        {"input-file", 'i', 0, G_OPTION_ARG_FILENAME, &input_file,
+                                                              "Set the input H264 file", NULL},
+        {"topic", 't', 0, G_OPTION_ARG_STRING, &topic,
+                                                              "Name of message topic. Optional if it is part of connection string or config file.", NULL},
+        {"conn-str", 0, 0, G_OPTION_ARG_STRING, &conn_str,
+                                                              "Connection string of backend server. Optional if it is part of config file.", NULL},
+        {"proto-lib", 'p', 0, G_OPTION_ARG_STRING, &proto_lib,
+                                                              "Absolute path of adaptor library", NULL},
+        {"schema", 's', 0, G_OPTION_ARG_INT, &schema_type,
+                                                              "Type of message schema (0=Full, 1=minimal), default=0", NULL},
+        {"no-display", 0, 0, G_OPTION_ARG_NONE, &display_off, "Disable display", NULL},
+        {NULL}
+};
+static void generate_ts_rfc3339 (char *buf, int buf_size)
+{
+    time_t tloc;
+    struct tm tm_log;
+    struct timespec ts;
+    char strmsec[6]; //.nnnZ\0
+
+    clock_gettime(CLOCK_REALTIME,  &ts);
+    memcpy(&tloc, (void *)(&ts.tv_sec), sizeof(time_t));
+    gmtime_r(&tloc, &tm_log);
+    strftime(buf, buf_size,"%Y-%m-%dT%H:%M:%S", &tm_log);
+    int ms = ts.tv_nsec/1000000;
+    g_snprintf(strmsec, sizeof(strmsec),".%.3dZ", ms);
+    strncat(buf, strmsec, buf_size);
+}
+
+static gpointer meta_copy_func (gpointer data, gpointer user_data)
+{
+    NvDsUserMeta *user_meta = (NvDsUserMeta *) data;
+    NvDsEventMsgMeta *srcMeta = (NvDsEventMsgMeta *) user_meta->user_meta_data;
+    NvDsEventMsgMeta *dstMeta = NULL;
+
+    dstMeta = static_cast<NvDsEventMsgMeta *>(g_memdup(srcMeta, sizeof(NvDsEventMsgMeta)));
+
+    if (srcMeta->ts)
+        dstMeta->ts = g_strdup (srcMeta->ts);
+
+    if (srcMeta->sensorStr)
+        dstMeta->sensorStr = g_strdup (srcMeta->sensorStr);
+
+    if (srcMeta->objSignature.size > 0) {
+        dstMeta->objSignature.signature = static_cast<gdouble *>(g_memdup(srcMeta->objSignature.signature,
+                                                                          srcMeta->objSignature.size));
+        dstMeta->objSignature.size = srcMeta->objSignature.size;
+    }
+
+    if(srcMeta->objectId) {
+        dstMeta->objectId = g_strdup (srcMeta->objectId);
+    }
+
+    if (srcMeta->extMsgSize > 0) {
+
+        NvDsPersonObject *srcObj = (NvDsPersonObject *) srcMeta->extMsg;
+        NvDsPersonObject *obj = (NvDsPersonObject *) g_malloc0 (sizeof (NvDsPersonObject));
+
+        obj->age = srcObj->age;
+
+        if (srcObj->gender)
+            obj->gender = g_strdup (srcObj->gender);
+        if (srcObj->cap)
+            obj->cap = g_strdup (srcObj->cap);
+        if (srcObj->hair)
+            obj->hair = g_strdup (srcObj->hair);
+        if (srcObj->apparel)
+            obj->apparel = g_strdup (srcObj->apparel);
+        dstMeta->extMsg = obj;
+        dstMeta->extMsgSize = sizeof (NvDsPersonObject);
+    }
+
+    return dstMeta;
+}
+
+static void meta_free_func (gpointer data, gpointer user_data)
+{
+    NvDsUserMeta *user_meta = (NvDsUserMeta *) data;
+    NvDsEventMsgMeta *srcMeta = (NvDsEventMsgMeta *) user_meta->user_meta_data;
+
+    g_free (srcMeta->ts);
+    g_free (srcMeta->sensorStr);
+
+    if (srcMeta->objSignature.size > 0) {
+        g_free (srcMeta->objSignature.signature);
+        srcMeta->objSignature.size = 0;
+    }
+
+    if(srcMeta->objectId) {
+        g_free (srcMeta->objectId);
+    }
+
+    if (srcMeta->extMsgSize > 0) {
+
+        NvDsPersonObject *obj = (NvDsPersonObject *) srcMeta->extMsg;
+
+        if (obj->gender)
+            g_free (obj->gender);
+        if (obj->cap)
+            g_free (obj->cap);
+        if (obj->hair)
+            g_free (obj->hair);
+        if (obj->apparel)
+            g_free (obj->apparel);
+        g_free (srcMeta->extMsg);
+        srcMeta->extMsgSize = 0;
+    }
+    g_free (user_meta->user_meta_data);
+    user_meta->user_meta_data = NULL;
+}
+
+static void
+generate_person_meta (gpointer data, gchar *face_vector)
+{
+    NvDsPersonObject *obj = (NvDsPersonObject *) data;
+    obj->age = 100;
+    obj->cap = g_strdup ("none");
+    obj->hair = g_strdup ("datdat");
+    obj->gender = g_strdup ("male");
+    obj->apparel= g_strdup ("formal");
+}
+
+static void
+generate_event_msg_meta (gpointer data, gint class_id, NvDsObjectMeta * obj_params)
+{
+    NvDsEventMsgMeta *meta = (NvDsEventMsgMeta *) data;
+    meta->sensorId = 0;
+    meta->placeId = 0;
+    meta->moduleId = 0;
+    meta->sensorStr = g_strdup ("sensor-0");
+
+    meta->ts = (gchar *) g_malloc0 (MAX_TIME_STAMP_LEN + 1);
+    meta->objectId = (gchar *) g_malloc0 (MAX_LABEL_SIZE);
+
+    strncpy(meta->objectId, obj_params->obj_label, MAX_LABEL_SIZE);
+
+    generate_ts_rfc3339(meta->ts, MAX_TIME_STAMP_LEN);
+
+    /*
+     * This demonstrates how to attach custom objects.
+     * Any custom object as per requirement can be generated and attached
+     * like NvDsVehicleObject / NvDsPersonObject. Then that object should
+     * be handled in payload generator library (nvmsgconv.cpp) accordingly.
+     */
+
+    meta->type = NVDS_EVENT_ENTRY;
+    meta->objType = NVDS_OBJECT_TYPE_PERSON;
+    meta->objClassId = 11111111111111111111111.1;
+
+    NvDsPersonObject *obj = (NvDsPersonObject *) g_malloc0 (sizeof (NvDsPersonObject));
+    generate_person_meta (obj,meta->videoPath);
+
+    meta->extMsg = obj;
+    meta->extMsgSize = sizeof (NvDsPersonObject);
+}
+
 static gchar *
 get_absolute_file_path (gchar *cfg_file_path, gchar *file_path)
 {
@@ -291,7 +466,7 @@ static GstPadProbeReturn pgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
     return GST_PAD_PROBE_OK;
 }
 
-void print(std::vector <float> const &a) {
+void print(std::vector <double> const &a) {
     for(int i=0; i < a.size(); i++)
         std::cout << a.at(i) << ' ';
     printf("\n");
@@ -316,9 +491,33 @@ static GstPadProbeReturn sgie_pad_buffer_probe(GstPad *pad, GstPadProbeInfo *inf
                         info->buffer = meta->out_buf_ptrs_host[i];
                         if (use_device_mem && meta->out_buf_ptrs_dev[i]) {
                             cudaMemcpy(meta->out_buf_ptrs_host[i], meta->out_buf_ptrs_dev[i],info->inferDims.numElements, cudaMemcpyDeviceToHost);
-                            std::vector<float> outputi = std::vector<float>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
+                            std::vector<gdouble> outputi = std::vector<gdouble>((float *) info[i].buffer, (float *) info[i].buffer + info[i].inferDims.numElements);
+//add kafka
+                            NvDsEventMsgMeta *msg_meta = (NvDsEventMsgMeta *) g_malloc0 (sizeof (NvDsEventMsgMeta));
+                            msg_meta->trackingId = 123456789;
+                            //Convert vector to string
+                            std::stringstream ss;
+                            for(int i=0; i < outputi.size(); i++){
+                                ss << "|" << outputi[i];
+                            }
+                            std::cout << ss.str() << ' ';
+                            // gan char* = ss (vector)
+                            msg_meta->videoPath = g_strdup (ss.str().c_str());
                             print(outputi);
+                            generate_event_msg_meta (msg_meta, obj_meta->class_id, obj_meta);
+
+                            NvDsUserMeta *user_event_meta = nvds_acquire_user_meta_from_pool (batch_meta);
+                            if (user_event_meta) {
+                                user_event_meta->user_meta_data = (void *) msg_meta;
+                                user_event_meta->base_meta.meta_type = NVDS_EVENT_MSG_META;
+                                user_event_meta->base_meta.copy_func = (NvDsMetaCopyFunc) meta_copy_func;
+                                user_event_meta->base_meta.release_func = (NvDsMetaReleaseFunc) meta_free_func;
+                                nvds_add_user_meta_to_frame(frame_meta, user_event_meta);
+                            } else {
+                                g_print ("Error in attaching event meta to buffer\n");
+                            }
                         }
+
                     }
                 }
             }
@@ -460,8 +659,33 @@ int main(int argc, char *argv[]){
                       "file:///home/d/Downloads/videoplayback.mp4",
                       "file:///home/d/Downloads/videoplayback.mp4"};
 
-    guint num_sources = 1;
-    gst_init(&argc, &argv);
+    guint num_sources = 2;
+    //add kafka
+    GstPad *osd_sink_pad = NULL;
+    GstPad *tee_render_pad = NULL;
+    GstPad *tee_msg_pad = NULL;
+    GstPad *sink_pad = NULL;
+    GstPad *src_pad = NULL;
+    GOptionContext *ctx = NULL;
+    GOptionGroup *group = NULL;
+    GError *error = NULL;
+    GstElement *msgconv = NULL, *msgbroker = NULL, *tee = NULL;
+    GstElement *queueConv = NULL, *queueBroker = NULL;
+    ctx = g_option_context_new ("Nvidia DeepStream Test4");
+    group = g_option_group_new ("test4", NULL, NULL, NULL, NULL);
+    g_option_group_add_entries (group, entries);
+
+    g_option_context_set_main_group (ctx, group);
+    g_option_context_add_group (ctx, gst_init_get_option_group ());
+
+
+    if (!g_option_context_parse (ctx, &argc, &argv, &error)) {
+        g_option_context_free (ctx);
+        g_printerr ("%s", error->message);
+        return -1;
+    }
+    g_option_context_free (ctx);
+
     loop = g_main_loop_new(NULL, FALSE);
     pipeline = gst_pipeline_new("dstensor-pipeline");
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
@@ -488,10 +712,36 @@ int main(int argc, char *argv[]){
     sink = gst_element_factory_make("nveglglessink", "nvvideo-renderer");
     tiler = gst_element_factory_make("nvmultistreamtiler", "tiler");
     g_object_set(G_OBJECT (tiler), "rows", 1, "columns",(guint) ceil(1.0 * num_sources / 1), "width", MUXER_OUTPUT_WIDTH, "height", MUXER_OUTPUT_HEIGHT,NULL);
+   //add kafka
+    /* Create msg converter to generate payload from buffer metadata */
+    msgconv = gst_element_factory_make ("nvmsgconv", "nvmsg-converter");
+    /* Create msg broker to send payload to server */
+    msgbroker = gst_element_factory_make ("nvmsgbroker", "nvmsg-broker");
+    /* Create tee to render buffer and send message simultaneously*/
+    tee = gst_element_factory_make ("tee", "nvsink-tee");
+    /* Create queues */
+    queueConv = gst_element_factory_make ("queue", "nvtee-que1");
+    queueBroker = gst_element_factory_make ("queue", "nvtee-que2");
+    g_object_set (G_OBJECT(msgconv), "config", MSCONV_CONFIG_FILE, NULL);
+    g_object_set (G_OBJECT(msgconv), "payload-type", schema_type, NULL);
+
+    g_object_set (G_OBJECT(msgbroker), "proto-lib", proto_lib,
+                  "conn-str", conn_str, "sync", FALSE, NULL);
+
+    if (topic) {
+        g_object_set (G_OBJECT(msgbroker), "topic", topic, NULL);
+    }
+
+    if (cfg_file) {
+        g_object_set (G_OBJECT(msgbroker), "config", cfg_file, NULL);
+    }
+
+    g_object_set (G_OBJECT (sink), "sync", TRUE, NULL);
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
-    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue,nvtracker, queue6, sgie1, queue4,tiler, queue2, nvvidconv, queue3, nvosd,sink, NULL);
+    gst_bin_add_many(GST_BIN (pipeline),streammux, pgie, queue,nvtracker, queue6, sgie1, queue4,tiler, queue2, nvvidconv, queue3, nvosd,tee, queueBroker, queueConv, msgconv,
+                     msgbroker,sink, NULL);
 
     for (int i = 0; i < num_sources; i++){
             GstPad *sinkpad, *srcpad;
@@ -541,7 +791,40 @@ int main(int argc, char *argv[]){
     g_object_set (G_OBJECT (tiler), "rows", tiler_rows, "columns", tiler_columns,
                   "width", MUXER_OUTPUT_WIDTH, "height", MUXER_OUTPUT_HEIGHT, NULL);
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    gst_element_link_many(streammux, pgie, queue,nvtracker, queue6, nvvidconv, queue3, sgie1, queue4, tiler, queue2, nvosd,sink, NULL);
+    gst_element_link_many(streammux, pgie, queue,nvtracker, queue6, nvvidconv, queue3, sgie1, queue4, tiler, queue2, nvosd,tee, NULL);
+    if (!gst_element_link_many (queueConv, msgconv, msgbroker, NULL)) {
+        g_printerr ("Elements could not be linked. Exiting.\n");
+        return -1;
+    }
+    if (!gst_element_link (queueBroker, sink)) {
+        g_printerr ("Elements could not be linked. Exiting.\n");
+        return -1;
+    }
+    //add kafka
+    sink_pad = gst_element_get_static_pad (queueConv, "sink");
+    tee_msg_pad = gst_element_get_request_pad (tee, "src_%u");
+    tee_render_pad = gst_element_get_request_pad (tee, "src_%u");
+    if (!tee_msg_pad || !tee_render_pad) {
+        g_printerr ("Unable to get request pads\n");
+        return -1;
+    }
+
+    if (gst_pad_link (tee_msg_pad, sink_pad) != GST_PAD_LINK_OK) {
+        g_printerr ("Unable to link tee and message converter\n");
+        gst_object_unref (sink_pad);
+        return -1;
+    }
+
+    gst_object_unref (sink_pad);
+
+    sink_pad = gst_element_get_static_pad (queueBroker, "sink");
+    if (gst_pad_link (tee_render_pad, sink_pad) != GST_PAD_LINK_OK) {
+        g_printerr ("Unable to link tee and render\n");
+        gst_object_unref (sink_pad);
+        return -1;
+    }
+
+    gst_object_unref (sink_pad);
     ///////////////////////////////////// post process the output from pgie ////////////////////////////////////////////
     queue_src_pad = gst_element_get_static_pad(queue, "src");
     gst_pad_add_probe(queue_src_pad, GST_PAD_PROBE_TYPE_BUFFER, pgie_pad_buffer_probe, NULL, NULL);
